@@ -15,15 +15,13 @@ from constants import TOKEN
 from db import *
 
 
-BOT_TOKEN = TOKEN
-
 # Налаштування логування
 logging.basicConfig(filename='/home/galmed/svitlograf/logs/svitlo.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Ініціалізація бота та диспетчера
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
@@ -116,7 +114,7 @@ async def send_daily_message():
     user_list = get_all_user()
     logger.info(f"Початок надсилання графіків користувачам")
 
-    for user in user_list:
+    for user in user_list[:1]:
         try:
             current_time = datetime.now().time()
             if current_time.hour >= 23:
@@ -141,9 +139,10 @@ async def send_daily_message():
             # Отримайте результат
             result_element = driver.find_element(By.ID, "tomorrowGraphId")
             svg_code = result_element.get_attribute('outerHTML')
-            if 'Графік погодинних вимкнень буде' in str(svg_code):
+
+            if 'Графік погодинних вимкнень буде' in str(svg_code) or 'інформація щодо Графіка погодинного' in str(svg_code):
                 logger.error(f"Ще не має графіку відключень для {user['user']}")
-                await asyncio.sleep(60)
+                await asyncio.sleep(300)
                 await asyncio.create_task(send_daily_message())
                 break
 

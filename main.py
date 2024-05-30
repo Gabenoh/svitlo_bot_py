@@ -76,7 +76,7 @@ async def get_schedule(message: types.Message):
         png_file_path = '/home/galmed/svitlograf/chart.png'
         if 'інформація щодо Графіка погодинного' in str(svg_code):
             await message.reply(text='Інформація щодо графіка відключень відсутня на '
-                                     'сайті\nшвидше за все завтра не буде відключень')
+                                     'сайті\nшвидше за все сьогодні не буде відключень')
             return None
 
         # Конвертація SVG в PNG
@@ -114,14 +114,13 @@ async def send_daily_message():
     user_list = get_all_user()
     logger.info(f"Початок надсилання графіків користувачам")
 
-    for user in user_list[:1]:
+    for user in user_list:
         try:
-            current_time = datetime.now().time()
+            current_time = datetime.datetime.now().time()
             if current_time.hour >= 23:
                 logger.warning("Час перевищує 23:00, зупинка виконання.")
                 await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
                                                                   'сайті\nшвидше за все завтра не буде відключень')
-                return None
 
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")
@@ -141,10 +140,11 @@ async def send_daily_message():
             svg_code = result_element.get_attribute('outerHTML')
 
             if 'Графік погодинних вимкнень буде' in str(svg_code) or 'інформація щодо Графіка погодинного' in str(svg_code):
-                logger.error(f"Ще не має графіку відключень для {user['user']}")
-                await asyncio.sleep(300)
-                await asyncio.create_task(send_daily_message())
-                break
+                logger.warning(f"Ще не має графіку відключень для {user['user']}")
+                if current_time.hour < 23:
+                    await asyncio.sleep(300)
+                    await asyncio.create_task(send_daily_message())
+                    break
 
             with open('chart.svg', 'w') as file:
                 file.write(svg_code)

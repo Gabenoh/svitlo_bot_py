@@ -46,6 +46,8 @@ def check_user(user_id: str, turn: str) -> None:
         user = session.query(Svitlo).filter(Svitlo.user == user_id).first()
         if not user:
             add_user(user_id, turn)
+        else:
+            update_user_turn(user_id, turn)
     except SQLAlchemyError as e:
         session.rollback()
         print(f"Error checking user: {e}")
@@ -54,12 +56,12 @@ def check_user(user_id: str, turn: str) -> None:
 
 
 def update_user_turn(user_id: int, turn: str) -> None:
-    """Редагування існуючого користувача"""
+    """Редагування наявного користувача"""
     session = Session()
     try:
         stmt = (
             update(Svitlo)
-            .where(Svitlo.id == user_id)
+            .where(Svitlo.user == user_id)
             .values(turn=turn)
         )
         session.execute(stmt)

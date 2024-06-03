@@ -44,6 +44,12 @@ async def add_command(message: types.Message):
             await message.reply(f"№{row['id']}, user {row['user']}, \n turn - {row['turn']}")
 
 
+@dp.message_handler(commands=['send_all', 'графіки'])
+async def send_all_command(message: types.Message):
+    if str(message.from_user.id) == '358330105':
+        await send_daily_message()
+
+
 @dp.message_handler()
 async def get_schedule(message: types.Message):
     user_number = message.text

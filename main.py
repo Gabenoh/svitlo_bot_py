@@ -76,7 +76,7 @@ async def get_schedule(message: types.Message):
         png_file_path = '/home/galmed/svitlograf/chart.png'
         if 'інформація щодо Графіка погодинного' in str(svg_code):
             await message.reply(text='Інформація щодо графіка відключень відсутня на '
-                                     'сайті\nшвидше за все сьогодні не буде відключень')
+                                     'сайті швидше за все сьогодні не буде відключень')
             return None
 
         # Конвертація SVG в PNG
@@ -120,49 +120,48 @@ async def send_daily_message():
             if current_time.hour >= 23:
                 logger.warning("Час перевищує 23:00, зупинка виконання.")
                 await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
-                                                                  'сайті\nшвидше за все завтра не буде відключень')
+                                                                  'сайті швидше за все завтра буде світло весь день')
+            else:
+                # Відкрийте сайт
+                driver.get("https://svitlo.oe.if.ua")
 
-            # Відкрийте сайт
-            driver.get("https://svitlo.oe.if.ua")
+                # Знайдіть поле для введення номера і введіть номер
+                number_input = driver.find_element(By.ID, "searchAccountNumber")
+                number_input.send_keys(user['turn'])
 
-            # Знайдіть поле для введення номера і введіть номер
-            number_input = driver.find_element(By.ID, "searchAccountNumber")
-            number_input.send_keys(user['turn'])
+                # Натисніть кнопку для отримання графіку
+                submit_button = driver.find_element(By.ID, "accountNumberReport")
+                submit_button.click()
 
-            # Натисніть кнопку для отримання графіку
-            submit_button = driver.find_element(By.ID, "accountNumberReport")
-            submit_button.click()
+                time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
-            time.sleep(3)  # Зачекайте, поки сторінка завантажиться
+                # Отримайте результат
+                result_element = driver.find_element(By.ID, "tomorrowGraphId")
+                svg_code = result_element.get_attribute('outerHTML')
 
-            # Отримайте результат
-            result_element = driver.find_element(By.ID, "tomorrowGraphId")
-            svg_code = result_element.get_attribute('outerHTML')
-
-            if 'Графік погодинних вимкнень буде' in str(svg_code) or 'інформація щодо Графіка погодинного' in str(svg_code):
-                logger.warning(f"Ще не має графіку відключень для {user['user']}")
-                if current_time.hour < 23:
+                if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
+                    logger.warning(f"Ще не має графіку відключень для {user['user']}")
                     await asyncio.sleep(300)
                     await asyncio.create_task(send_daily_message())
                     break
 
-            with open('chart.svg', 'w') as file:
-                file.write(svg_code)
+                with open('chart.svg', 'w') as file:
+                    file.write(svg_code)
 
-            remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+                remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
 
-            # Шлях до SVG файлу
-            svg_file_path = '/home/galmed/svitlograf/chart.svg'
-            png_file_path = '/home/galmed/svitlograf/chart.png'
+                # Шлях до SVG файлу
+                svg_file_path = '/home/galmed/svitlograf/chart.svg'
+                png_file_path = '/home/galmed/svitlograf/chart.png'
 
-            # Конвертація SVG в PNG
-            cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
+                # Конвертація SVG в PNG
+                cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
 
-            # Відправте PNG файл як зображення
-            # Створіть InputFile об'єкт для PNG файлу
-            png_file = InputFile(png_file_path)
-            await bot.send_photo(chat_id=user['user'], photo=png_file)
-            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
+                # Відправте PNG файл як зображення
+                # Створіть InputFile об'єкт для PNG файлу
+                png_file = InputFile(png_file_path)
+                await bot.send_photo(chat_id=user['user'], photo=png_file)
+                logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
 
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
@@ -175,8 +174,8 @@ async def scheduler():
 
 
 def main():
-    # Запланувати завдання на 21:00 кожного дня
-    schedule.every().day.at("21:00").do(lambda: asyncio.create_task(send_daily_message()))
+    # Запланувати завдання на 20:02 кожного дня
+    schedule.every().day.at("20:02").do(lambda: asyncio.create_task(send_daily_message()))
 
     # Запустити планувальник
     loop = asyncio.get_event_loop()

@@ -109,7 +109,8 @@ def remove_elements_before_first_gt(svg_file_path):
     # Видаляємо частину рядка до першого знака >
     content = content[first_gt_index:len(content)-12]
     content = content.replace('100%', '350px', 2)
-    content = content.replace('font-size="0.6em"', 'font-size="9px"', 1)
+    content = content.replace('font-size="0.6em"', 'font-size="10px"', 1)
+    content = content.replace('font-size="0.8em"', 'font-size="15px"', 1)
 
     # Записуємо зміни у вихідний SVG-файл
     with open(svg_file_path, 'w') as file:

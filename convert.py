@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+import cairosvg
 import time
 
 
@@ -26,15 +27,38 @@ def get_schedule():
         time.sleep(3)  # Зачекайте, поки сторінка завантажиться
 
         # Отримайте результат
-        result_element = driver.find_element(By.ID, "tomorrowGraphId")
+        result_element = driver.find_element(By.ID, "todayGraphId")
         svg_code = result_element.get_attribute('outerHTML')
         print(svg_code)
         with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
             file.write(svg_code)
+        svg_file_path = '/home/galmed/svitlograf/chart.svg'
+        png_file_path = '/home/galmed/svitlograf/chart.png'
+        remove_elements_before_first_gt(svg_file_path)
+        cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
 
     except Exception as e:
         print('Виникла помилка при отриманні графіку. Спробуйте пізніше.')
         print(f'{e}')
 
+
+def remove_elements_before_first_gt(svg_file_path):
+    # Відкриваємо SVG-файл для читання
+    with open(svg_file_path, 'r') as file:
+        content = file.read()
+
+    # Знаходимо позицію першого знака >
+    first_gt_index = content.find('<svg')
+
+    # Видаляємо частину рядка до першого знака >
+    content = content[first_gt_index:len(content)-12]
+    content = content.replace('100%', '350px', 2)
+    content = content.replace('font-size="0.6em"', 'font-size="10px"', 1)
+    content = content.replace('font-size="0.8em"', 'font-size="15px"', 1)
+
+    # Записуємо зміни у вихідний SVG-файл
+    with open(svg_file_path, 'w') as file:
+        file.write(content)
+
+
 get_schedule()
-'Графік погодинних вимкнень буде'

@@ -2,5 +2,5 @@
 /.idea
 /constants/token.py
 /logs/svitlo.log
-chart.png.png
-chart.png.svg
+chart.png
+chart.svg

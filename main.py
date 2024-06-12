@@ -182,7 +182,7 @@ async def scheduler():
 
 def main():
     # Запланувати завдання на 20:02 кожного дня
-    schedule.every().day.at("20:02").do(lambda: asyncio.create_task(send_daily_message()))
+    schedule.every().day.at("17:32").do(lambda: asyncio.create_task(send_daily_message()))
 
     # Запустити планувальник
     loop = asyncio.get_event_loop()

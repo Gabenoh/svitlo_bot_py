@@ -2,7 +2,7 @@ import logging
 import cairosvg
 import datetime
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode, InputFile
+from aiogram.types import ParseMode, InputFile, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from selenium import webdriver
@@ -31,6 +31,13 @@ options.add_argument('--headless')  # Запускає браузер у фон�
 driver = webdriver.Chrome(options=options)
 
 
+# Створюємо клавіатуру
+admin_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+admin_keyboard.add(KeyboardButton('/all'))
+admin_keyboard.add(KeyboardButton('/send_tomorrow_graf'))
+admin_keyboard.add(KeyboardButton('21010148'))
+
+
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("Привіт! Введіть ваш номер особового рахунку для отримання графіку відключень світла.")
@@ -44,7 +51,15 @@ async def add_command(message: types.Message):
             await message.reply(f"№{row['id']}, user {row['user']}, \n turn - {row['turn']}")
 
 
-@dp.message_handler(commands=['send_all', 'графіки'])
+@dp.message_handler(commands=['admin'])
+async def admin_command(message: types.Message):
+    if str(message.from_user.id) == '358330105':
+        await message.answer("Привіт, адмін!", reply_markup=admin_keyboard)
+    else:
+        await message.answer("У вас немає доступу до цієї команди.")
+
+
+@dp.message_handler(commands=['send_all', 'графіки', 'send_tomorrow_graf'])
 async def send_all_command(message: types.Message):
     if str(message.from_user.id) == '358330105':
         await send_daily_message()

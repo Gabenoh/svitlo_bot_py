@@ -2,12 +2,11 @@ import logging
 import cairosvg
 import datetime
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode, InputFile, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InputFile, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from sqlalchemy.exc import SQLAlchemyError
 import schedule
 import asyncio
 import time
@@ -33,8 +32,9 @@ driver = webdriver.Chrome(options=options)
 
 # Створюємо клавіатуру
 admin_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-admin_keyboard.add(KeyboardButton('/all'))
-admin_keyboard.add(KeyboardButton('/send_tomorrow_graf'))
+admin_keyboard.add(KeyboardButton('/all_user_list'))
+admin_keyboard.add(KeyboardButton('/send_tomorrow_graf_all'))
+admin_keyboard.add(KeyboardButton('/send_today_graf_all'))
 admin_keyboard.add(KeyboardButton('21010148'))
 
 
@@ -43,7 +43,7 @@ async def send_welcome(message: types.Message):
     await message.reply("Привіт! Введіть ваш номер особового рахунку для отримання графіку відключень світла.")
 
 
-@dp.message_handler(commands=['all', 'всі'])
+@dp.message_handler(commands=['all_user_list', 'всі'])
 async def add_command(message: types.Message):
     if str(message.from_user.id) == '358330105':
         user_list = get_all_user()
@@ -59,10 +59,16 @@ async def admin_command(message: types.Message):
         await message.answer("У вас немає доступу до цієї команди.")
 
 
-@dp.message_handler(commands=['send_all', 'графіки', 'send_tomorrow_graf'])
+@dp.message_handler(commands=['send_tomorrow_graf_all'])
 async def send_all_command(message: types.Message):
     if str(message.from_user.id) == '358330105':
         await send_daily_message()
+
+
+@dp.message_handler(commands=['send_today_graf_all'])
+async def send_all_command(message: types.Message):
+    if str(message.from_user.id) == '358330105':
+        await send_daily_message(day='todayGraphId')
 
 
 @dp.message_handler()
@@ -132,7 +138,7 @@ def remove_elements_before_first_gt(svg_file_path):
         file.write(content)
 
 
-async def send_daily_message():
+async def send_daily_message(day='tomorrowGraphId'):
     user_list = get_all_user()
     logger.info(f"Початок надсилання графіків користувачам")
 
@@ -158,7 +164,7 @@ async def send_daily_message():
                 time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
                 # Отримайте результат
-                result_element = driver.find_element(By.ID, "tomorrowGraphId")
+                result_element = driver.find_element(By.ID, day)
                 svg_code = result_element.get_attribute('outerHTML')
 
                 if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
@@ -187,6 +193,8 @@ async def send_daily_message():
 
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
+            await asyncio.sleep(900)
+            await asyncio.create_task(send_daily_message())
 
 
 async def scheduler():

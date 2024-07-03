@@ -7,7 +7,8 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-import schedule
+# import schedule
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 import time
 from constants import TOKEN
@@ -144,28 +145,32 @@ async def send_daily_message(day='tomorrowGraphId'):
 
     for user in user_list:
         try:
-            current_time = datetime.datetime.now().time()
-            if current_time.hour >= 23:
+            if datetime.datetime.now().time().hour >= 23:
                 logger.warning("Час перевищує 23:00, зупинка виконання.")
                 await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
                                                                   'сайті швидше за все завтра буде світло весь день')
             else:
                 # Відкрийте сайт
                 driver.get("https://svitlo.oe.if.ua")
+                logger.info(f"Сайт відкрило")
 
                 # Знайдіть поле для введення номера і введіть номер
                 number_input = driver.find_element(By.ID, "searchAccountNumber")
                 number_input.send_keys(user['turn'])
+                logger.info(f"Елемент знайдено")
 
                 # Натисніть кнопку для отримання графіку
                 submit_button = driver.find_element(By.ID, "accountNumberReport")
                 submit_button.click()
+                logger.info(f"На елемент натиснуто")
 
                 time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
                 # Отримайте результат
                 result_element = driver.find_element(By.ID, day)
                 svg_code = result_element.get_attribute('outerHTML')
+
+                logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
 
                 if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
                     logger.warning(f"Ще не має графіку відключень для {user['user']}")
@@ -197,19 +202,27 @@ async def send_daily_message(day='tomorrowGraphId'):
             await asyncio.create_task(send_daily_message())
 
 
-async def scheduler():
-    while True:
-        schedule.run_pending()
-        await asyncio.sleep(1)
+# async def scheduler():
+#     while True:
+#         schedule.run_pending()
+#         await asyncio.sleep(1)
 
 
 def main():
     # Запланувати завдання на 17:34 кожного дня
-    schedule.every().day.at("17:34").do(lambda: asyncio.create_task(send_daily_message()))
-
+    # schedule.every().day.at("17:24").do(lambda: asyncio.create_task(send_daily_message()))
     # Запустити планувальник
+    # loop = asyncio.get_event_loop()
+    # loop.create_task(scheduler())
+
+    scheduler = AsyncIOScheduler()
+    # Запланувати завдання на 21:00 кожного дня
+    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)
+    scheduler.start()
+
+    # Запустити перевірку сайту
     loop = asyncio.get_event_loop()
-    loop.create_task(scheduler())
+    loop.create_task(send_daily_message())
 
     # Запустити бота
     executor.start_polling(dp, skip_updates=True)

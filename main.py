@@ -1,19 +1,17 @@
 import logging
 import cairosvg
 import datetime
+import time
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InputFile, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.utils import executor
+from aiogram.utils import executor, exceptions
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-# import schedule
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
-import time
 from constants import TOKEN
 from db import *
-
 
 # Налаштування логування
 logging.basicConfig(filename='/home/galmed/svitlograf/logs/svitlo.log', level=logging.INFO,
@@ -29,7 +27,6 @@ dp.middleware.setup(LoggingMiddleware())
 options = webdriver.ChromeOptions()
 options.add_argument('--headless')  # Запускає браузер у фоновому режимі
 driver = webdriver.Chrome(options=options)
-
 
 # Створюємо клавіатуру
 admin_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -149,80 +146,67 @@ async def send_daily_message(day='tomorrowGraphId'):
                 logger.warning("Час перевищує 23:00, зупинка виконання.")
                 await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
                                                                   'сайті швидше за все завтра буде світло весь день')
-            else:
-                # Відкрийте сайт
-                driver.get("https://svitlo.oe.if.ua")
-                logger.info(f"Сайт відкрило")
+                continue  # Переходьте до наступного користувача, не виходьте з циклу
 
-                # Знайдіть поле для введення номера і введіть номер
-                number_input = driver.find_element(By.ID, "searchAccountNumber")
-                number_input.send_keys(user['turn'])
-                logger.info(f"Елемент знайдено")
+            # Відкрийте сайт
+            driver.get("https://svitlo.oe.if.ua")
+            logger.info(f"Сайт відкрило")
 
-                # Натисніть кнопку для отримання графіку
-                submit_button = driver.find_element(By.ID, "accountNumberReport")
-                submit_button.click()
-                logger.info(f"На елемент натиснуто")
+            # Знайдіть поле для введення номера і введіть номер
+            number_input = driver.find_element(By.ID, "searchAccountNumber")
+            number_input.send_keys(user['turn'])
+            logger.info(f"Елемент знайдено")
 
-                time.sleep(5)  # Зачекайте, поки сторінка завантажиться
+            # Натисніть кнопку для отримання графіку
+            submit_button = driver.find_element(By.ID, "accountNumberReport")
+            submit_button.click()
+            logger.info(f"На елемент натиснуто")
 
-                # Отримайте результат
-                result_element = driver.find_element(By.ID, day)
-                svg_code = result_element.get_attribute('outerHTML')
+            time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
-                logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
+            # Отримайте результат
+            result_element = driver.find_element(By.ID, day)
+            svg_code = result_element.get_attribute('outerHTML')
 
-                if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
-                    logger.warning(f"Ще не має графіку відключень для {user['user']}")
-                    await asyncio.sleep(300)
-                    await asyncio.create_task(send_daily_message())
-                    break
+            logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
 
-                with open('chart.svg', 'w') as file:
-                    file.write(svg_code)
+            if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
+                logger.warning(f"Ще не має графіку відключень для {user['user']}")
+                await asyncio.sleep(300)
+                await asyncio.create_task(send_daily_message())
+                break
 
-                remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+            with open('chart.svg', 'w') as file:
+                file.write(svg_code)
 
-                # Шлях до SVG файлу
-                svg_file_path = '/home/galmed/svitlograf/chart.svg'
-                png_file_path = '/home/galmed/svitlograf/chart.png'
+            remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
 
-                # Конвертація SVG в PNG
-                cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
+            # Шлях до SVG файлу
+            svg_file_path = '/home/galmed/svitlograf/chart.svg'
+            png_file_path = '/home/galmed/svitlograf/chart.png'
 
-                # Відправте PNG файл як зображення
-                # Створіть InputFile об'єкт для PNG файлу
-                png_file = InputFile(png_file_path)
-                await bot.send_photo(chat_id=user['user'], photo=png_file)
-                logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
+            # Конвертація SVG в PNG
+            cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
 
+            # Відправте PNG файл як зображення
+            # Створіть InputFile об'єкт для PNG файлу
+            png_file = InputFile(png_file_path)
+            await bot.send_photo(chat_id=user['user'], photo=png_file)
+            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
+
+        except exceptions.BotBlocked:
+            logger.warning(f"Користувач заблокував бота: {user['user']}")
+            continue  # Пропустити цього користувача і перейти до наступного
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
             await asyncio.sleep(900)
             await asyncio.create_task(send_daily_message())
 
 
-# async def scheduler():
-#     while True:
-#         schedule.run_pending()
-#         await asyncio.sleep(1)
-
-
 def main():
-    # Запланувати завдання на 17:34 кожного дня
-    # schedule.every().day.at("17:24").do(lambda: asyncio.create_task(send_daily_message()))
-    # Запустити планувальник
-    # loop = asyncio.get_event_loop()
-    # loop.create_task(scheduler())
-
     scheduler = AsyncIOScheduler()
-    # Запланувати завдання на 21:00 кожного дня
-    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)
+    scheduler.add_job(send_daily_message, 'cron', hour=21, minute=0)  # Запланувати завдання на 21:00 кожного дня
     scheduler.start()
-
-    # Запустити перевірку сайту
-    loop = asyncio.get_event_loop()
-    loop.create_task(send_daily_message())
 
     # Запустити бота
     executor.start_polling(dp, skip_updates=True)

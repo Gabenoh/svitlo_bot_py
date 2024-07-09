@@ -205,7 +205,7 @@ async def send_daily_message(day='tomorrowGraphId'):
 
 def main():
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_daily_message, 'cron', hour=21, minute=0)  # Запланувати завдання на 21:00 кожного дня
+    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)  # Запланувати завдання на 21:00 кожного дня
     scheduler.start()
 
     # Запустити бота

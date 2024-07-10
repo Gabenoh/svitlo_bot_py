@@ -139,7 +139,8 @@ def remove_elements_before_first_gt(svg_file_path):
 async def send_daily_message(day='tomorrowGraphId'):
     user_list = get_all_user()
     logger.info(f"Початок надсилання графіків користувачам")
-
+    if not user_list:
+        user_list = get_all_user()
     for user in user_list:
         try:
             if datetime.datetime.now().time().hour >= 23:

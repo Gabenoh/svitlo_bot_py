@@ -3,8 +3,14 @@ from sqlalchemy import Column, Integer, String, create_engine, delete, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from constants import ENGINE
+import logging
+
 # Створення об'єкта Base
 Base = declarative_base()
+
+logging.basicConfig(filename='/home/galmed/svitlograf/logs/svitlo.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 # Визначення моделі Svitlo
@@ -34,7 +40,7 @@ def add_user(user_id: str, turn: str) -> None:
         session.commit()
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error adding user: {e}")
+        logger.error(f"Помилка при додаванні користувача: {e}")
     finally:
         session.close()
 
@@ -50,7 +56,7 @@ def check_user(user_id: str, turn: str) -> None:
             update_user_turn(user_id, turn)
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error checking user: {e}")
+        logger.error(f"Помилка при перевірці користувача: {e}")
     finally:
         session.close()
 
@@ -68,7 +74,7 @@ def update_user_turn(user_id: int, turn: str) -> None:
         session.commit()
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error updating user: {e}")
+        logger.error(f"Помилка при оновленні користувача: {e}")
     finally:
         session.close()
 
@@ -80,7 +86,7 @@ def get_all_user() -> List[Dict[str, str]]:
         user_list = session.query(Svitlo).all()
         return [{'id': str(user.id), 'user': user.user, 'turn': user.turn} for user in user_list]
     except SQLAlchemyError as e:
-        print(f"Error retrieving users: {e}")
+        logger.error(f"Помилка при виводу всіх користувачів {e}")
         return []
     finally:
         session.close()
@@ -95,6 +101,6 @@ def delete_user(user_id: int) -> None:
         session.commit()
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error deleting user: {e}")
+        print(f"Помилка при видаленні користувача: {e}")
     finally:
         session.close()

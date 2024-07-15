@@ -153,17 +153,17 @@ async def send_daily_message(day='tomorrowGraphId'):
 
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")
-            logger.info(f"Сайт відкрило")
+            # logger.info(f"Сайт відкрило")
 
             # Знайдіть поле для введення номера і введіть номер
             number_input = driver.find_element(By.ID, "searchAccountNumber")
             number_input.send_keys(user['turn'])
-            logger.info(f"Елемент знайдено")
+            # logger.info(f"Елемент знайдено")
 
             # Натисніть кнопку для отримання графіку
             submit_button = driver.find_element(By.ID, "accountNumberReport")
             submit_button.click()
-            logger.info(f"На елемент натиснуто")
+            # logger.info(f"На елемент натиснуто")
 
             time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
@@ -201,7 +201,7 @@ async def send_daily_message(day='tomorrowGraphId'):
                 await bot.send_message(chat_id=user['user'],
                                        text=f'Оновлений графік відключень на сьогодні{todaydate()}')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
-            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
+            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}")
 
         except exceptions.BotBlocked:
             logger.warning(f"Користувач заблокував бота: {user['user']}")

@@ -5,6 +5,10 @@ current_date = datetime.datetime.now()
 
 
 def todaydate():
+    """
+    Надсилає тепершню дату у форматі день.місяць.рік
+    :return: current_date
+    """
     # Форматуємо дату у форматі день.місяць.рік
     formatted_date = current_date.strftime("%d.%m.%Y")
     # Виводимо відформатовану дату
@@ -12,6 +16,10 @@ def todaydate():
 
 
 def tomorowdate():
+    """
+    Надсилає завтрішню дату у форматі день.місяць.рік
+    :return: tomorrow_date
+    """
     # Додаємо один день до поточної дати
     tomorrow = current_date + datetime.timedelta(days=1)
 

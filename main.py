@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 from constants import TOKEN
+from utils import *
 from db import *
 
 # Налаштування логування
@@ -72,7 +73,8 @@ async def send_all_command(message: types.Message):
 @dp.message_handler()
 async def get_schedule(message: types.Message):
     user_number = message.text
-
+    logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
+                f'надіслав повідомлення {user_number}')
     try:
         # Відкрийте сайт
         driver.get("https://svitlo.oe.if.ua")
@@ -192,6 +194,12 @@ async def send_daily_message(day='tomorrowGraphId'):
             # Відправте PNG файл як зображення
             # Створіть InputFile об'єкт для PNG файлу
             png_file = InputFile(png_file_path)
+            if day == 'tomorrowGraphId':
+                await bot.send_message(chat_id=user['user'],
+                                       text=f'Ваш графік відключень на завтра{tomorowdate()}')
+            elif day == 'todayGraphId':
+                await bot.send_message(chat_id=user['user'],
+                                       text=f'Оновлений графік відключень на сьогодні{todaydate()}')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
             logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
 
@@ -206,7 +214,7 @@ async def send_daily_message(day='tomorrowGraphId'):
 
 def main():
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)  # Запланувати завдання на 21:00 кожного дня
+    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)  # Запланувати завдання на 17:22 кожного дня
     scheduler.start()
 
     # Запустити бота

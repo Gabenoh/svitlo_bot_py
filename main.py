@@ -196,10 +196,10 @@ async def send_daily_message(day='tomorrowGraphId'):
             png_file = InputFile(png_file_path)
             if day == 'tomorrowGraphId':
                 await bot.send_message(chat_id=user['user'],
-                                       text=f'Ваш графік відключень на завтра{tomorowdate()}')
+                                       text=f'Ваш графік відключень на завтра {tomorowdate()}')
             elif day == 'todayGraphId':
                 await bot.send_message(chat_id=user['user'],
-                                       text=f'Оновлений графік відключень на сьогодні{todaydate()}')
+                                       text=f'Оновлений графік відключень на сьогодні {todaydate()}')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
             logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}")
 

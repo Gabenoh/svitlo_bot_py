@@ -104,3 +104,9 @@ def delete_user(user_id: int) -> None:
         print(f"Помилка при видаленні користувача: {e}")
     finally:
         session.close()
+
+
+if __name__ == '__main__':
+    user_list = get_all_user()
+    for user in user_list:
+        print(user)

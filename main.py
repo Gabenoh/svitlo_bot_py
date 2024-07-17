@@ -8,6 +8,7 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor, exceptions
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 from constants import TOKEN
@@ -72,7 +73,20 @@ async def send_all_command(message: types.Message):
 
 @dp.message_handler()
 async def get_schedule(message: types.Message):
-    user_number = message.text
+    """Отримання номер особового рахунку від користувача додавання його в базу на розсилку графіків"""
+    user_number = message.text.strip()
+
+    logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
+                f'надіслав повідомлення {user_number}')
+
+    # Перевірка, чи введене значення містить тільки цифри та не більше 8 символів
+    if not user_number.isdigit():
+        await message.reply("Будь ласка, введіть правильний номер особового рахунку, що складається тільки з цифр.")
+        return
+
+    if len(user_number) > 8:
+        await message.reply("Номер особового рахунку не може бути більше 8 символів. Спробуйте ще раз.")
+        return
     logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
                 f'надіслав повідомлення {user_number}')
     try:
@@ -87,7 +101,7 @@ async def get_schedule(message: types.Message):
         submit_button = driver.find_element(By.ID, "accountNumberReport")
         submit_button.click()
 
-        time.sleep(3)  # Зачекайте, поки сторінка завантажиться
+        time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
         # Отримайте результат
         result_element = driver.find_element(By.ID, "todayGraphId")
@@ -113,6 +127,11 @@ async def get_schedule(message: types.Message):
         # Створіть InputFile об'єкт для PNG файлу
         png_file = InputFile(png_file_path)
         await message.reply_photo(photo=png_file)
+
+    except NoSuchElementException:
+        await message.reply('Номер особового рахунку не коректний або не знайдено графік відключень. '
+                            'Перевірте номер і спробуйте ще раз.')
+        logger.error("Error in get_schedule: Номер особового рахунку не коректний або не знайдено графік відключень.")
 
     except Exception as e:
         await message.reply('Виникла помилка при отриманні графіку. Спробуйте пізніше.')
@@ -171,7 +190,7 @@ async def send_daily_message(day='tomorrowGraphId'):
             result_element = driver.find_element(By.ID, day)
             svg_code = result_element.get_attribute('outerHTML')
 
-            logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
+            # logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
 
             if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
                 logger.warning(f"Ще не має графіку відключень для {user['user']}")
@@ -196,10 +215,10 @@ async def send_daily_message(day='tomorrowGraphId'):
             png_file = InputFile(png_file_path)
             if day == 'tomorrowGraphId':
                 await bot.send_message(chat_id=user['user'],
-                                       text=f'Ваш графік відключень на завтра {tomorowdate()}')
+                                       text=f'Ваш графік відключень на завтра {tomorowdate()} 👇')
             elif day == 'todayGraphId':
                 await bot.send_message(chat_id=user['user'],
-                                       text=f'Оновлений графік відключень на сьогодні {todaydate()}')
+                                       text=f'Оновлений графік відключень на сьогодні {todaydate()} 👇')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
             logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}")
 
@@ -212,10 +231,50 @@ async def send_daily_message(day='tomorrowGraphId'):
             await asyncio.create_task(send_daily_message())
 
 
+async def check_website_updates():
+    last_svg_code = None
+    while True:
+        try:
+            # Відкрийте сайт
+            driver.get("https://svitlo.oe.if.ua")
+
+            number_input = driver.find_element(By.ID, "searchAccountNumber")
+            number_input.send_keys('21010148')
+            # logger.info(f"Елемент знайдено")
+
+            # Натисніть кнопку для отримання графіку
+            submit_button = driver.find_element(By.ID, "accountNumberReport")
+            submit_button.click()
+            # logger.info(f"На елемент натиснуто")
+
+            time.sleep(10)  # Зачекайте, поки сторінка завантажиться
+
+            # Отримайте результат
+            result_element = driver.find_element(By.ID, 'todayGraphId')
+            current_svg_code = result_element.get_attribute('outerHTML')
+
+            if last_svg_code is None:
+                last_svg_code = current_svg_code
+
+            if current_svg_code != last_svg_code:
+                logger.info("Знайдено оновлення на сайті, розсилаємо графік")
+                await bot.send_message('358330105', text="З'явились оновлення графіку відключень")
+                last_svg_code = current_svg_code
+
+        except Exception as e:
+            logger.error(f"Помилка при перевірці оновлень сайту: {e}")
+
+        await asyncio.sleep(300)  # Перевіряти оновлення кожні 5 хвилин
+
+
 def main():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)  # Запланувати завдання на 17:22 кожного дня
     scheduler.start()
+
+    # Запустити перевірку сайту на оновлення
+    # loop = asyncio.get_event_loop()
+    # loop.create_task(check_website_updates())
 
     # Запустити бота
     executor.start_polling(dp, skip_updates=True)

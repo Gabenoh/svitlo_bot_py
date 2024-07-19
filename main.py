@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
-from constants import TOKEN
+from constants import TOKEN, admin
 from utils import *
 from db import *
 
@@ -45,7 +45,7 @@ async def send_welcome(message: types.Message):
 
 @dp.message_handler(commands=['all_user_list', 'всі'])
 async def add_command(message: types.Message):
-    if str(message.from_user.id) == '358330105':
+    if await admin(message.from_user.id):
         user_list = get_all_user()
         for row in user_list:
             await message.reply(f"№{row['id']}, user {row['user']}, \n turn - {row['turn']}")
@@ -53,7 +53,7 @@ async def add_command(message: types.Message):
 
 @dp.message_handler(commands=['admin'])
 async def admin_command(message: types.Message):
-    if str(message.from_user.id) == '358330105':
+    if await admin(message.from_user.id):
         await message.answer("Привіт, адмін!", reply_markup=admin_keyboard)
     else:
         await message.answer("У вас немає доступу до цієї команди.")
@@ -61,13 +61,13 @@ async def admin_command(message: types.Message):
 
 @dp.message_handler(commands=['send_tomorrow_graf_all'])
 async def send_all_command(message: types.Message):
-    if str(message.from_user.id) == '358330105':
+    if await admin(message.from_user.id):
         await send_daily_message()
 
 
 @dp.message_handler(commands=['send_today_graf_all'])
 async def send_all_command(message: types.Message):
-    if str(message.from_user.id) == '358330105':
+    if await admin(message.from_user.id):
         await send_daily_message(day='todayGraphId')
 
 
@@ -89,53 +89,61 @@ async def get_schedule(message: types.Message):
         return
     logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
                 f'надіслав повідомлення {user_number}')
-    try:
-        # Відкрийте сайт
-        driver.get("https://svitlo.oe.if.ua")
+    for day_time in ["todayGraphId", 'tomorrowGraphId']:
+        try:
+            # Відкрийте сайт
+            driver.get("https://svitlo.oe.if.ua")
 
-        # Знайдіть поле для введення номера і введіть номер
-        number_input = driver.find_element(By.ID, "searchAccountNumber")
-        number_input.send_keys(user_number)
+            # Знайдіть поле для введення номера і введіть номер
+            number_input = driver.find_element(By.ID, "searchAccountNumber")
+            number_input.send_keys(user_number)
 
-        # Натисніть кнопку для отримання графіку
-        submit_button = driver.find_element(By.ID, "accountNumberReport")
-        submit_button.click()
+            # Натисніть кнопку для отримання графіку
+            submit_button = driver.find_element(By.ID, "accountNumberReport")
+            submit_button.click()
 
-        time.sleep(5)  # Зачекайте, поки сторінка завантажиться
+            time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
-        # Отримайте результат
-        result_element = driver.find_element(By.ID, "todayGraphId")
-        svg_code = result_element.get_attribute('outerHTML')
-        with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
-            file.write(svg_code)
+            # Отримайте результат
+            result_element = driver.find_element(By.ID, day_time)
+            svg_code = result_element.get_attribute('outerHTML')
+            with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
+                file.write(svg_code)
 
-        check_user(message.from_user.id, user_number)
-        remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+            check_user(message.from_user.id, user_number)
+            remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
 
-        # Шлях до SVG файлу
-        svg_file_path = '/home/galmed/svitlograf/chart.svg'
-        png_file_path = '/home/galmed/svitlograf/chart.png'
-        if 'інформація щодо Графіка погодинного' in str(svg_code):
-            await message.reply(text='Інформація щодо графіка відключень відсутня на '
-                                     'сайті швидше за все сьогодні не буде відключень')
-            return None
+            # Шлях до SVG файлу
+            svg_file_path = '/home/galmed/svitlograf/chart.svg'
+            png_file_path = '/home/galmed/svitlograf/chart.png'
+            if 'інформація щодо Графіка погодинного' in str(svg_code):
+                await message.reply(text='Інформація щодо графіка відключень відсутня на '
+                                         'сайті швидше за все сьогодні не буде відключень')
+                return None
+            if 'Графік погодинних вимкнень' in svg_code:
+                await message.reply(f'Вашого графіка погодинних відключень на завтра {tomorowdate()} ще немає')
+                break
+            elif day_time == 'tomorrowGraphId':
+                await message.reply(text=f'Ваш графік відключень на завтра {tomorowdate()} 👇')
+            elif day_time == 'todayGraphId':
+                await message.reply(text=f'Ваш графік відключень на сьогодні {todaydate()} 👇')
+            # Конвертація SVG в PNG
+            cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
 
-        # Конвертація SVG в PNG
-        cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
+            # Відправте PNG файл як зображення
+            # Створіть InputFile об'єкт для PNG файлу
+            png_file = InputFile(png_file_path)
+            await message.reply_photo(photo=png_file)
 
-        # Відправте PNG файл як зображення
-        # Створіть InputFile об'єкт для PNG файлу
-        png_file = InputFile(png_file_path)
-        await message.reply_photo(photo=png_file)
+        except NoSuchElementException:
+            await message.reply('Номер особового рахунку не коректний або не знайдено графік відключень. '
+                                'Перевірте номер і спробуйте ще раз.')
+            logger.error("Error in get_schedule: "
+                         "Номер особового рахунку не коректний або не знайдено графік відключень.")
 
-    except NoSuchElementException:
-        await message.reply('Номер особового рахунку не коректний або не знайдено графік відключень. '
-                            'Перевірте номер і спробуйте ще раз.')
-        logger.error("Error in get_schedule: Номер особового рахунку не коректний або не знайдено графік відключень.")
-
-    except Exception as e:
-        await message.reply('Виникла помилка при отриманні графіку. Спробуйте пізніше.')
-        logger.error(f"Error in get_schedule: {e}")
+        except Exception as e:
+            await message.reply('Виникла помилка при отриманні графіку. Спробуйте пізніше.')
+            logger.error(f"Error in get_schedule: {e}")
 
 
 def remove_elements_before_first_gt(svg_file_path):
@@ -158,10 +166,11 @@ def remove_elements_before_first_gt(svg_file_path):
 
 
 async def send_daily_message(day='tomorrowGraphId'):
-    user_list = get_all_user()
-    logger.info(f"Початок надсилання графіків користувачам")
-    if not user_list:
+    try:
         user_list = get_all_user()
+    except:
+        user_list = get_all_user()
+    logger.info(f"Початок надсилання графіків користувачам")
     for user in user_list:
         try:
             if datetime.datetime.now().time().hour >= 23:

@@ -1,1 +1,1 @@
-from .token import TOKEN, ENGINE
+from .token import TOKEN, ENGINE, admin

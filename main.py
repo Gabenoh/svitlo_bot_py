@@ -1,7 +1,6 @@
 import logging
 import cairosvg
 import datetime
-import time
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InputFile, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
@@ -10,7 +9,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import asyncio
 from constants import TOKEN, admin
 from utils import *
 from db import *
@@ -166,10 +164,9 @@ def remove_elements_before_first_gt(svg_file_path):
 
 
 async def send_daily_message(day='tomorrowGraphId'):
-    try:
-        user_list = get_all_user()
-    except:
-        user_list = get_all_user()
+
+    user_list = get_all_user_with_retry()
+
     logger.info(f"Початок надсилання графіків користувачам")
     for user in user_list:
         try:

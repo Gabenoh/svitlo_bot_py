@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import asyncio
 from constants import TOKEN, admin
 from utils import *
 from db import *
@@ -165,7 +166,7 @@ def remove_elements_before_first_gt(svg_file_path):
 
 async def send_daily_message(day='tomorrowGraphId'):
 
-    user_list = get_all_user_with_retry()
+    user_list = get_all_user()
 
     logger.info(f"Початок надсилання графіків користувачам")
     for user in user_list:

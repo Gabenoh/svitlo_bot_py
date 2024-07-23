@@ -5,7 +5,6 @@ from sqlalchemy.exc import SQLAlchemyError, OperationalError
 import mysql.connector
 from constants import ENGINE
 import logging
-import asyncio
 import time
 from functools import wraps
 

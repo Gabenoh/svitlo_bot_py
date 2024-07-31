@@ -60,15 +60,38 @@ async def admin_command(message: types.Message):
 
 
 @dp.message_handler(commands=['send_tomorrow_graf_all'])
-async def send_all_command(message: types.Message):
+async def send_all_tammarow(message: types.Message):
     if await admin(message.from_user.id):
         await send_daily_message()
 
 
 @dp.message_handler(commands=['send_today_graf_all'])
-async def send_all_command(message: types.Message):
+async def send_all_today_(message: types.Message):
     if await admin(message.from_user.id):
         await send_daily_message(day='todayGraphId')
+
+
+@dp.message_handler(commands=['send_message_all'])
+async def send_all_message(message: types.Message):
+    if await admin(message.from_user.id):
+        try:
+            message_text = message.get_args()
+            if not message_text:
+                await message.reply("Будь ласка, введіть текст повідомлення після команди /send_message_all")
+                return
+
+            user_list = get_all_user()
+
+            for user in user_list:
+                try:
+                    await bot.send_message(chat_id=user['user'], text=message_text)
+                    logger.info(f"Повідомлення {message_text} відправлено користувачу: {user['user']}")
+                except Exception as e:
+                    logger.error(f"Не вдалося відправити повідомлення користувачу {user['user']}: {e}")
+            await message.reply("Повідомлення успішно відправлено всім користувачам.")
+        except Exception as e:
+            logger.error(f"Помилка при відправці повідомлень: {e}")
+            await message.reply("Сталася помилка при відправці повідомлень.")
 
 
 @dp.message_handler()

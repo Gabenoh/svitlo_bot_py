@@ -94,6 +94,17 @@ async def send_all_message(message: types.Message):
             await message.reply("Сталася помилка при відправці повідомлень.")
 
 
+async def send_message_to_all():
+    user_list = get_all_user()
+    logger.info(f"Початок надсилання повідомлень про відсутність відключень")
+    for user in user_list:
+        try:
+            await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
+                                                              'сайті швидше за все завтра буде світло весь день')
+        except Exception as e:
+            logger.error(f"Помилка при відправці повідомлень про відсутність графіків.: {e}")
+
+
 @dp.message_handler()
 async def get_schedule(message: types.Message):
     """Отримання номер особового рахунку від користувача додавання його в базу на розсилку графіків"""
@@ -197,9 +208,8 @@ async def send_daily_message(day='tomorrowGraphId'):
         try:
             if datetime.datetime.now().time().hour >= 23:
                 logger.warning("Час перевищує 23:00, зупинка виконання.")
-                await bot.send_message(chat_id=user['user'], text='Інформація щодо графіка відключень відсутня на '
-                                                                  'сайті швидше за все завтра буде світло весь день')
-                continue  # Переходьте до наступного користувача, не виходьте з циклу
+                await send_message_to_all()
+                return None
 
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")

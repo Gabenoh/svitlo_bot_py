@@ -60,7 +60,7 @@ async def admin_command(message: types.Message):
 
 
 @dp.message_handler(commands=['send_tomorrow_graf_all'])
-async def send_all_tammarow(message: types.Message):
+async def send_all_tomorrow(message: types.Message):
     if await admin(message.from_user.id):
         await send_daily_message()
 
@@ -144,7 +144,9 @@ async def get_schedule(message: types.Message):
             with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
                 file.write(svg_code)
 
-            check_user(message.from_user.id, user_number)
+            # додавання скороченої черги відключень
+            min_turn = turn_abbreviated_check('/home/galmed/svitlograf/chart.svg')
+            check_user(message.from_user.id, user_number, min_turn)
             remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
 
             # Шлях до SVG файлу
@@ -199,6 +201,15 @@ def remove_elements_before_first_gt(svg_file_path):
         file.write(content)
 
 
+def turn_abbreviated_check(svg_file_path):
+
+    with open(svg_file_path, 'r') as file:
+        content = file.read()
+    turn_index = content.find('font-size: 30px">')
+    turn_index = content[turn_index+17:turn_index+20]
+    return turn_index
+
+
 async def send_daily_message(day='tomorrowGraphId'):
 
     user_list = get_all_user()
@@ -218,20 +229,16 @@ async def send_daily_message(day='tomorrowGraphId'):
             # Знайдіть поле для введення номера і введіть номер
             number_input = driver.find_element(By.ID, "searchAccountNumber")
             number_input.send_keys(user['turn'])
-            # logger.info(f"Елемент знайдено")
 
             # Натисніть кнопку для отримання графіку
             submit_button = driver.find_element(By.ID, "accountNumberReport")
             submit_button.click()
-            # logger.info(f"На елемент натиснуто")
 
             time.sleep(5)  # Зачекайте, поки сторінка завантажиться
 
             # Отримайте результат
             result_element = driver.find_element(By.ID, day)
             svg_code = result_element.get_attribute('outerHTML')
-
-            # logger.info(f"Перші рядки сфг файлу: {svg_code[:30]}")
 
             if 'Графік погодинних' in str(svg_code) or 'інформація щодо' in str(svg_code):
                 logger.warning(f"Ще не має графіку відключень для {user['user']}")
@@ -243,6 +250,10 @@ async def send_daily_message(day='tomorrowGraphId'):
                 file.write(svg_code)
 
             remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+
+            # Додавання скороченої черги
+            turn_abbreviated = turn_abbreviated_check('/home/galmed/svitlograf/chart.svg')
+            add_users_turn_abbreviated(user_id=user['id'], turn_abbreviated=turn_abbreviated)
 
             # Шлях до SVG файлу
             svg_file_path = '/home/galmed/svitlograf/chart.svg'
@@ -262,6 +273,7 @@ async def send_daily_message(day='tomorrowGraphId'):
                                        text=f'Оновлений графік відключень на сьогодні {todaydate()} 👇')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
             logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}")
+
 
         except exceptions.BotBlocked:
             logger.warning(f"Користувач заблокував бота: {user['user']}")
@@ -306,6 +318,7 @@ async def check_website_updates():
             logger.error(f"Помилка при перевірці оновлень сайту: {e}")
 
         await asyncio.sleep(300)  # Перевіряти оновлення кожні 5 хвилин
+
 
 
 def main():

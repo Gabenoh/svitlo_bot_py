@@ -132,11 +132,3 @@ if __name__ == '__main__':
             print(user)
     except Exception as e:
         logger.error(f"Error in main execution: {e}")
-
-
-# if __name__ == '__main__':
-#     add_users_turn_abbreviated(user_id='358330105', turn_abbreviated='4.2')
-#     user_list = get_all_user()
-#     check_user(user_id='358330105', turn='21010148')
-#     for user in user_list[:1]:
-#         print(user)

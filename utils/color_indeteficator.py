@@ -1,10 +1,10 @@
 import re
 
 
-def extract_colors_from_svg(file_path:str) -> list[str]:
+def extract_colors_from_svg(content :str) -> list[str]:
     """
 
-    :param file_path:
+    :param content:
     :return: list of color
 
     """
@@ -15,10 +15,6 @@ def extract_colors_from_svg(file_path:str) -> list[str]:
 
     # Змінна для збереження результату
     colors = []
-
-    # Читання SVG файлу
-    with open(file_path, 'r') as file:
-        content = file.read()
 
     # Пошук всіх кодів кольорів у SVG файлі
     matches = re.findall(r'#\w{6}', content)

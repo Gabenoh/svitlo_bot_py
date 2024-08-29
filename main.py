@@ -7,7 +7,7 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor, exceptions
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 import time
@@ -25,10 +25,17 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 dp.middleware.setup(LoggingMiddleware())
 
-# Налаштування Selenium WebDriver
-options = webdriver.ChromeOptions()
-options.add_argument('--headless')  # Запускає браузер у фоновому режимі
-driver = webdriver.Chrome(options=options)
+# Функція для створення WebDriver
+def create_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')  # Запускає браузер у фоновому режимі
+    print('створено новий драйвер')
+    return webdriver.Chrome(options=options)
+
+# Ініціалізація WebDriver
+driver = create_driver()
+requests_count = 0
+max_requests_before_restart = 100  # Перезапустити WebDriver після 100 запитів
 
 # Створюємо клавіатуру
 admin_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -37,11 +44,9 @@ admin_keyboard.add(KeyboardButton('/send_tomorrow_graf_all'))
 admin_keyboard.add(KeyboardButton('/send_today_graf_all'))
 admin_keyboard.add(KeyboardButton('21010148'))
 
-
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("Привіт! Введіть ваш номер особового рахунку для отримання графіку відключень світла.")
-
 
 @dp.message_handler(commands=['all_user_list', 'всі'])
 async def add_command(message: types.Message):
@@ -50,7 +55,6 @@ async def add_command(message: types.Message):
         for row in user_list:
             await message.reply(f"№{row['id']}, user {row['user']}, \n turn - {row['turn']}")
 
-
 @dp.message_handler(commands=['admin'])
 async def admin_command(message: types.Message):
     if await admin(message.from_user.id):
@@ -58,18 +62,15 @@ async def admin_command(message: types.Message):
     else:
         await message.answer("У вас немає доступу до цієї команди.")
 
-
 @dp.message_handler(commands=['send_tomorrow_graf_all'])
 async def send_all_tomorrow(message: types.Message):
     if await admin(message.from_user.id):
         await send_daily_message()
 
-
 @dp.message_handler(commands=['send_today_graf_all'])
 async def send_all_today_(message: types.Message):
     if await admin(message.from_user.id):
         await send_daily_message(day='todayGraphId')
-
 
 @dp.message_handler(commands=['send_message_all'])
 async def send_all_message(message: types.Message):
@@ -93,7 +94,6 @@ async def send_all_message(message: types.Message):
             logger.error(f"Помилка при відправці повідомлень: {e}")
             await message.reply("Сталася помилка при відправці повідомлень.")
 
-
 async def send_message_to_all():
     user_list = get_all_user()
     logger.info(f"Початок надсилання повідомлень про відсутність відключень")
@@ -104,10 +104,10 @@ async def send_message_to_all():
         except Exception as e:
             logger.error(f"Помилка при відправці повідомлень про відсутність графіків.: {e}")
 
-
 @dp.message_handler()
 async def get_schedule(message: types.Message):
     """Отримання номер особового рахунку від користувача додавання його в базу на розсилку графіків"""
+    global driver, requests_count
     user_number = message.text.strip()
 
     logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
@@ -121,12 +121,17 @@ async def get_schedule(message: types.Message):
     if len(user_number) > 8:
         await message.reply("Номер особового рахунку не може бути більше 8 символів. Спробуйте ще раз.")
         return
-    logger.info(f'Користувач {message.from_user.first_name, message.from_user.last_name}'
-                f'надіслав повідомлення {user_number}')
+
+    if requests_count >= max_requests_before_restart:
+        driver.quit()
+        driver = create_driver()
+        requests_count = 0
+
     for day_time in ["todayGraphId", 'tomorrowGraphId']:
         try:
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")
+            requests_count += 1
 
             # Знайдіть поле для введення номера і введіть номер
             number_input = driver.find_element(By.ID, "searchAccountNumber")
@@ -176,44 +181,16 @@ async def get_schedule(message: types.Message):
                                 'Перевірте номер і спробуйте ще раз.')
             logger.error("Error in get_schedule: "
                          "Номер особового рахунку не коректний або не знайдено графік відключень.")
-
+        except WebDriverException as e:
+            logger.error(f"WebDriver exception: {e}")
+            await message.reply("Виникла проблема з обробкою вашого запиту. Спробуйте пізніше.")
         except Exception as e:
             await message.reply('Виникла помилка при отриманні графіку. Спробуйте пізніше.')
             logger.error(f"Error in get_schedule: {e}")
 
-
-def remove_elements_before_first_gt(svg_file_path):
-    # Відкриваємо SVG-файл для читання
-    with open(svg_file_path, 'r') as file:
-        content = file.read()
-
-    # Знаходимо позицію першого знака >
-    first_gt_index = content.find('<svg')
-
-    # Видаляємо частину рядка до першого знака >
-    content = content[first_gt_index:len(content)-12]
-    content = content.replace('100%', '350px', 2)
-    content = content.replace('font-size="0.6em"', 'font-size="10px"', 1)
-    content = content.replace('font-size="0.8em"', 'font-size="15px"', 1)
-
-    # Записуємо зміни у вихідний SVG-файл
-    with open(svg_file_path, 'w') as file:
-        file.write(content)
-
-
-def turn_abbreviated_check(svg_file_path):
-
-    with open(svg_file_path, 'r') as file:
-        content = file.read()
-    turn_index = content.find('font-size: 30px">')
-    turn_index = content[turn_index+17:turn_index+20]
-    return turn_index
-
-
 async def send_daily_message(day='tomorrowGraphId'):
-
+    global driver, requests_count
     user_list = get_all_user()
-
     logger.info(f"Початок надсилання графіків користувачам")
     for user in user_list:
         try:
@@ -222,9 +199,14 @@ async def send_daily_message(day='tomorrowGraphId'):
                 await send_message_to_all()
                 return None
 
+            if requests_count >= max_requests_before_restart:
+                driver.quit()
+                driver = create_driver()
+                requests_count = 0
+
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")
-            # logger.info(f"Сайт відкрило")
+            requests_count += 1
 
             # Знайдіть поле для введення номера і введіть номер
             number_input = driver.find_element(By.ID, "searchAccountNumber")
@@ -274,52 +256,57 @@ async def send_daily_message(day='tomorrowGraphId'):
             await bot.send_photo(chat_id=user['user'], photo=png_file)
             logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}")
 
-
         except exceptions.BotBlocked:
             logger.warning(f"Користувач заблокував бота: {user['user']}")
             continue  # Пропустити цього користувача і перейти до наступного
+        except WebDriverException as e:
+            logger.error(f"WebDriver exception: {e}")
+            await asyncio.sleep(900)
+            await asyncio.create_task(send_daily_message())
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
             await asyncio.sleep(900)
             await asyncio.create_task(send_daily_message())
 
-
-async def check_website_updates():
-    last_svg_code = None
+async def check_website_updates(last_color_list=None):
+    global driver, requests_count
     while True:
         try:
+            if requests_count >= max_requests_before_restart:
+                driver.quit()
+                driver = create_driver()
+                requests_count = 0
+
             # Відкрийте сайт
             driver.get("https://svitlo.oe.if.ua")
+            requests_count += 1
 
             number_input = driver.find_element(By.ID, "searchAccountNumber")
             number_input.send_keys('21010148')
-            # logger.info(f"Елемент знайдено")
 
             # Натисніть кнопку для отримання графіку
             submit_button = driver.find_element(By.ID, "accountNumberReport")
             submit_button.click()
-            # logger.info(f"На елемент натиснуто")
 
             time.sleep(10)  # Зачекайте, поки сторінка завантажиться
 
             # Отримайте результат
             result_element = driver.find_element(By.ID, 'todayGraphId')
-            current_svg_code = result_element.get_attribute('outerHTML')
+            svg_code = result_element.get_attribute('outerHTML')
+            color_list = extract_colors_from_svg(svg_code)
+            print(color_list)
+            if last_color_list is None:
+                last_color_list = color_list
 
-            if last_svg_code is None:
-                last_svg_code = current_svg_code
-
-            if current_svg_code != last_svg_code:
+            if last_color_list != color_list:
                 logger.info("Знайдено оновлення на сайті, розсилаємо графік")
                 await bot.send_message('358330105', text="З'явились оновлення графіку відключень")
-                last_svg_code = current_svg_code
+                last_color_list = color_list
 
         except Exception as e:
             logger.error(f"Помилка при перевірці оновлень сайту: {e}")
 
         await asyncio.sleep(300)  # Перевіряти оновлення кожні 5 хвилин
-
-
 
 def main():
     scheduler = AsyncIOScheduler()
@@ -327,12 +314,11 @@ def main():
     scheduler.start()
 
     # Запустити перевірку сайту на оновлення
-    # loop = asyncio.get_event_loop()
-    # loop.create_task(check_website_updates())
+    loop = asyncio.get_event_loop()
+    loop.create_task(check_website_updates())
 
     # Запустити бота
     executor.start_polling(dp, skip_updates=True)
-
 
 if __name__ == '__main__':
     main()

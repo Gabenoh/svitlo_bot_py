@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Any
 from sqlalchemy import Column, Integer, String, create_engine, delete, update
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
@@ -79,6 +79,14 @@ def check_user(session, user_id: str, turn: str, turn_abbreviated: str) -> None:
 
 
 @retry_on_failure()
+def get_all_user_with_turn(session, turn_abbreviated: str) -> list[dict[str, str | Any]]:
+    """Перевірка користувача"""
+    user_list = session.query(Svitlo).filter(Svitlo.turn_abbreviated == turn_abbreviated).all()
+    return [{'id': str(user.id), 'user': user.user, 'turn': user.turn, 'turn_abbreviated': user.turn_abbreviated}
+            for user in user_list]
+
+
+@retry_on_failure()
 def update_user_turn(session, user_id: str, turn: str, turn_abbreviated: str) -> None:
     """Редагування наявного користувача"""
     stmt = (
@@ -126,9 +134,9 @@ def delete_user(session, user_number_id: int) -> None:
 
 if __name__ == '__main__':
     try:
-        check_user(user_id='358330105',turn='21010148', turn_abbreviated='4.1')
-        user_list = get_all_user()
-        for user in user_list[:1]:
-            print(user)
+        user_list = get_all_user_with_turn('1.1')
+        for i in user_list:
+            print(i)
+
     except Exception as e:
         logger.error(f"Error in main execution: {e}")

@@ -268,7 +268,8 @@ async def send_daily_message(day='tomorrowGraphId'):
             await asyncio.sleep(900)
             await asyncio.create_task(send_daily_message())
 
-async def check_website_updates(last_color_list=None):
+
+async def check_website_updates(last_color_list=None, turn='4.1'):
     global driver, requests_count
     while True:
         try:
@@ -294,19 +295,69 @@ async def check_website_updates(last_color_list=None):
             result_element = driver.find_element(By.ID, 'todayGraphId')
             svg_code = result_element.get_attribute('outerHTML')
             color_list = extract_colors_from_svg(svg_code)
-            print(color_list)
+
+
             if last_color_list is None:
                 last_color_list = color_list
 
             if last_color_list != color_list:
                 logger.info("Знайдено оновлення на сайті, розсилаємо графік")
                 await bot.send_message('358330105', text="З'явились оновлення графіку відключень")
+                with open(f'/home/galmed/svitlograf/chart{turn}.svg', 'w') as file:
+                    file.write(svg_code)
                 last_color_list = color_list
+                await send_update_graph(turn='4.1',svg_file_path=f'/home/galmed/svitlograf/chart{turn}.svg')
 
         except Exception as e:
             logger.error(f"Помилка при перевірці оновлень сайту: {e}")
 
         await asyncio.sleep(300)  # Перевіряти оновлення кожні 5 хвилин
+
+
+async def send_update_graph(day='todayGraphId',turn=None,svg_file_path=None):
+    global driver, requests_count
+    user_list = get_all_user_with_turn(turn)
+    logger.info(f"Початок надсилання ОНОВЛЕНИХ графіків користувачам")
+    for user in user_list:
+        try:
+            if datetime.datetime.now().time().hour == 00:
+                logger.warning("Час перевищує 00:00, зупинка виконання.")
+                return None
+
+            if requests_count >= max_requests_before_restart:
+                driver.quit()
+                driver = create_driver()
+                requests_count = 0
+
+            remove_elements_before_first_gt(svg_file_path)
+
+            # Шлях до SVG файлу
+            png_file_path = f'/home/galmed/svitlograf/chart{turn}.png'
+
+            # Конвертація SVG в PNG
+            cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
+
+            # Відправте PNG файл як зображення
+            # Створіть InputFile об'єкт для PNG файлу
+            png_file = InputFile(png_file_path)
+
+            if day == 'todayGraphId':
+                await bot.send_message(chat_id=user['user'],
+                                       text=f'Оновлений графік відключень на сьогодні {todaydate()} 👇')
+            await bot.send_photo(chat_id=user['user'], photo=png_file)
+            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}"
+                        f" чергою - {user['turn_abbreviated']}")
+        except exceptions.BotBlocked:
+            logger.warning(f"Користувач заблокував бота: {user['user']}")
+            continue  # Пропустити цього користувача і перейти до наступного
+        except WebDriverException as e:
+            logger.error(f"WebDriver exception: {e}")
+            await asyncio.sleep(900)
+            await asyncio.create_task(send_daily_message())
+        except Exception as e:
+            logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
+            await asyncio.sleep(900)
+            await asyncio.create_task(send_daily_message())
 
 def main():
     scheduler = AsyncIOScheduler()

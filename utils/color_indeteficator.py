@@ -10,7 +10,8 @@ def extract_colors_from_svg(content :str) -> list[str]:
     """
     color_mapping = {
         "#fb6666": 'red',
-        "#7acd6d": 'green'
+        "#7acd6d": 'green',
+        "#fbda66": 'yellow'
     }
 
     # Змінна для збереження результату

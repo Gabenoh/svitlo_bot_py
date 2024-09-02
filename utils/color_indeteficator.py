@@ -29,6 +29,6 @@ def extract_colors_from_svg(content :str) -> list[str]:
     return colors
 
 if __name__ =='__main__':
-    file_path = '/home/galmed/svitlograf/chart.svg'
+    file_path = '/home/galmed/svitlograf/test.svg'
     colors_list = extract_colors_from_svg(file_path)
     print(colors_list)

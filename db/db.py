@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from sqlalchemy import Column, Integer, String, create_engine, delete, update
+from sqlalchemy import Column, Integer, String, create_engine, delete, update, select, distinct
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 import mysql.connector
@@ -122,6 +122,14 @@ def get_all_user(session) -> List[Dict[str, str]]:
     return [{'id': str(user.id), 'user': user.user, 'turn': user.turn, 'turn_abbreviated': user.turn_abbreviated}
             for user in user_list]
 
+@retry_on_failure()
+def get_unique_abbreviated_turns(session):
+    # Використовуємо SQLAlchemy для отримання унікальних значень
+    result = session.query(distinct(Svitlo.turn_abbreviated)).all()
+    # Отримуємо тільки значення з результату
+    unique_turns = [row[0] for row in result]
+    return unique_turns
+
 
 @retry_on_failure()
 def delete_user(session, user_number_id: int) -> None:
@@ -134,9 +142,7 @@ def delete_user(session, user_number_id: int) -> None:
 
 if __name__ == '__main__':
     try:
-        user_list = get_all_user_with_turn('1.1')
-        for i in user_list:
-            print(i)
+        print(get_unique_abbreviated_turns())
 
     except Exception as e:
         logger.error(f"Error in main execution: {e}")

@@ -271,7 +271,8 @@ async def send_daily_message(day='tomorrowGraphId'):
 
 async def check_website_updates(last_color_list=None, turn='4.1'):
     global driver, requests_count
-    logger.info(f"Перевірку оновлень графіку запущено для черги {turn}")
+    check_number = get_first_user_with_turn_abbreviated(turn_abbreviated_value=turn)
+    logger.info(f"Перевірку оновлень графіку запущено для черги {turn}, з номером рахунку {check_number}")
     while True:
         try:
             if requests_count >= max_requests_before_restart:
@@ -284,7 +285,7 @@ async def check_website_updates(last_color_list=None, turn='4.1'):
             requests_count += 1
 
             number_input = driver.find_element(By.ID, "searchAccountNumber")
-            number_input.send_keys('21010148')
+            number_input.send_keys(check_number)
 
             # Натисніть кнопку для отримання графіку
             submit_button = driver.find_element(By.ID, "accountNumberReport")
@@ -363,8 +364,10 @@ def main():
 
     # Запустити перевірку сайту на оновлення
     loop = asyncio.get_event_loop()
-    loop.create_task(check_website_updates(turn='4.1'))
-    loop.create_task(check_website_updates(turn='1.1'))
+    turn_list = get_unique_abbreviated_turns()
+    for i in turn_list:
+        loop.create_task(check_website_updates(turn=i))
+
 
     # Запустити бота
     executor.start_polling(dp, skip_updates=True)

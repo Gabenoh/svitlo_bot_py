@@ -123,12 +123,32 @@ def get_all_user(session) -> List[Dict[str, str]]:
             for user in user_list]
 
 @retry_on_failure()
-def get_unique_abbreviated_turns(session):
+def get_unique_abbreviated_turns(session) -> List[str]:
+    """
+    :param session:
+    :return: list з унікальних черг
+    """
     # Використовуємо SQLAlchemy для отримання унікальних значень
     result = session.query(distinct(Svitlo.turn_abbreviated)).all()
     # Отримуємо тільки значення з результату
     unique_turns = [row[0] for row in result]
     return unique_turns
+
+@retry_on_failure()
+def get_first_user_with_turn_abbreviated(session, turn_abbreviated_value: str) -> str:
+    """
+    Отримати перший turn для якого turn_abbreviated дорівнює певному значенню.
+
+    :param session:
+    :param turn_abbreviated_value: значення turn_abbreviated для пошуку
+    :return: Значення turn або None, якщо не знайдено
+    """
+    # Використовуємо SQLAlchemy для пошуку першого значення turn, яке відповідає умові
+    result = session.query(Svitlo.turn).filter(Svitlo.turn_abbreviated == turn_abbreviated_value).first()
+    if result:
+        return result[0]
+    else:
+        return None
 
 
 @retry_on_failure()

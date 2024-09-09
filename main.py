@@ -194,8 +194,8 @@ async def send_daily_message(day='tomorrowGraphId'):
     logger.info(f"Початок надсилання графіків користувачам")
     for user in user_list:
         try:
-            if datetime.datetime.now().time().hour >= 23:
-                logger.warning("Час перевищує 23:00, зупинка виконання.")
+            if datetime.datetime.now().time().hour >= 22:
+                logger.warning("Час перевищує 22:00, зупинка виконання.")
                 await send_message_to_all()
                 return None
 
@@ -307,7 +307,7 @@ async def check_website_updates(last_color_list=None, turn='4.1'):
                 with open(f'/home/galmed/svitlograf/chart{turn}.svg', 'w') as file:
                     file.write(svg_code)
                 last_color_list = color_list
-                await send_update_graph(turn='4.1',svg_file_path=f'/home/galmed/svitlograf/chart{turn}.svg')
+                await send_update_graph(turn=turn,svg_file_path=f'/home/galmed/svitlograf/chart{turn}.svg')
 
         except Exception as e:
             logger.error(f"Помилка при перевірці оновлень сайту: {e}")
@@ -345,7 +345,7 @@ async def send_update_graph(day='todayGraphId',turn=None,svg_file_path=None):
                 await bot.send_message(chat_id=user['user'],
                                        text=f'Оновлений графік відключень на сьогодні {todaydate()} 👇')
             await bot.send_photo(chat_id=user['user'], photo=png_file)
-            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}"
+            logger.info(f"Оновлене повідомлення відправлено користувачу: {user['user']}, з ID: {user['id']}"
                         f" чергою - {user['turn_abbreviated']}")
         except exceptions.BotBlocked:
             logger.warning(f"Користувач заблокував бота: {user['user']}")
@@ -354,7 +354,7 @@ async def send_update_graph(day='todayGraphId',turn=None,svg_file_path=None):
             logger.error(f"WebDriver exception: {e}")
             await asyncio.sleep(900)
         except Exception as e:
-            logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
+            logger.error(f"Помилка при відправці оновленого повідомлення: {e}")
             break
 
 def main():

@@ -19,7 +19,6 @@ def extract_colors_from_svg(content :str) -> list[str]:
 
     # Пошук всіх кодів кольорів у SVG файлі
     matches = re.findall(r'#\w{6}', content)
-
     # Перетворення знайдених кодів кольорів у назви
     for match in matches:
         color_name = color_mapping.get(match, None)
@@ -29,6 +28,7 @@ def extract_colors_from_svg(content :str) -> list[str]:
     return colors
 
 if __name__ =='__main__':
-    file_path = '/home/galmed/svitlograf/test.svg'
-    colors_list = extract_colors_from_svg(file_path)
+    with open('/home/galmed/svitlograf/test.svg', 'r') as file:
+        file = file.read()
+        colors_list = extract_colors_from_svg(file)
     print(colors_list)

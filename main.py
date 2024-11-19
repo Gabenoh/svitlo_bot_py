@@ -269,7 +269,7 @@ async def send_daily_message(day='tomorrowGraphId'):
             await asyncio.create_task(send_daily_message())
 
 
-async def check_website_updates(last_color_list=None, turn='4.1'):
+async def check_website_updates(last_color_list=None, turn='4'):
     global driver, requests_count
     check_number = get_first_user_with_turn_abbreviated(turn_abbreviated_value=turn)
     logger.info(f"Перевірку оновлень графіку запущено для черги {turn}, з номером рахунку {check_number}")
@@ -297,7 +297,7 @@ async def check_website_updates(last_color_list=None, turn='4.1'):
             result_element = driver.find_element(By.ID, 'todayGraphId')
             svg_code = result_element.get_attribute('outerHTML')
             color_list = extract_colors_from_svg(svg_code)
-
+            logger.info(f'Кольори для черги {turn} :{color_list}')
 
             if last_color_list is None:
                 last_color_list = color_list

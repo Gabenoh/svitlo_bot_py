@@ -9,9 +9,7 @@ options.add_argument('--headless')  # Запускає браузер у фон�
 driver = webdriver.Chrome(options=options)
 
 
-def get_schedule():
-    user_number = '21010148'
-
+def get_schedule(user_number = '21010148'):
     try:
         # Відкрийте сайт
         driver.get("https://svitlo.oe.if.ua")

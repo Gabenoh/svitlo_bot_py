@@ -22,7 +22,7 @@ def turn_abbreviated_check(svg_file_path):
     with open(svg_file_path, 'r') as file:
         content = file.read()
     turn_index = content.find('font-size: 30px">')
-    turn_index = content[turn_index+17:turn_index+18]
+    turn_index = content[turn_index+17:turn_index+20]
     return turn_index
 
 

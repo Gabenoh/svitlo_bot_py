@@ -262,11 +262,11 @@ async def send_daily_message(day='tomorrowGraphId'):
         except WebDriverException as e:
             logger.error(f"WebDriver exception: {e}")
             await asyncio.sleep(900)
-            await asyncio.create_task(send_daily_message())
+            # await asyncio.create_task(send_daily_message())
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення: {e}")
             await asyncio.sleep(900)
-            await asyncio.create_task(send_daily_message())
+            # await asyncio.create_task(send_daily_message())
 
 
 async def check_website_updates(last_color_list=None, turn='4'):
@@ -359,7 +359,7 @@ async def send_update_graph(day='todayGraphId',turn=None,svg_file_path=None):
 
 def main():
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_daily_message, 'cron', hour=17, minute=22)  # Запланувати завдання на 17:22 кожного дня
+    scheduler.add_job(send_daily_message, trigger='cron', hour=17, minute=22, misfire_grace_time=15)  # Запланувати завдання на 17:22 кожного дня
     scheduler.start()
 
     # Запустити перевірку сайту на оновлення

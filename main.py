@@ -146,17 +146,17 @@ async def get_schedule(message: types.Message):
             # Отримайте результат
             result_element = driver.find_element(By.ID, day_time)
             svg_code = result_element.get_attribute('outerHTML')
-            with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
+            with open('/home/galmed/svitlograf/svg_image/chart.svg', 'w') as file:
                 file.write(svg_code)
 
             # додавання скороченої черги відключень
-            min_turn = turn_abbreviated_check('/home/galmed/svitlograf/chart.svg')
+            min_turn = turn_abbreviated_check('/home/galmed/svitlograf/svg_image/chart.svg')
             check_user(message.from_user.id, user_number, min_turn)
-            remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+            remove_elements_before_first_gt('/home/galmed/svitlograf/svg_image/chart.svg')
 
             # Шлях до SVG файлу
-            svg_file_path = '/home/galmed/svitlograf/chart.svg'
-            png_file_path = '/home/galmed/svitlograf/chart.png'
+            svg_file_path = '/home/galmed/svitlograf/svg_image/chart.svg'
+            png_file_path = '/home/galmed/svitlograf/svg_image/chart.png'
             if 'інформація щодо Графіка погодинного' in str(svg_code):
                 await message.reply(text='Інформація щодо графіка відключень відсутня на '
                                          'сайті швидше за все сьогодні не буде відключень')
@@ -228,18 +228,18 @@ async def send_daily_message(day='tomorrowGraphId'):
                 await asyncio.create_task(send_daily_message())
                 break
 
-            with open('chart.svg', 'w') as file:
+            with open('/home/galmed/svitlograf/svg_image/chart.svg', 'w') as file:
                 file.write(svg_code)
 
-            remove_elements_before_first_gt('/home/galmed/svitlograf/chart.svg')
+            remove_elements_before_first_gt('/home/galmed/svitlograf/svg_image/chart.svg')
 
             # Додавання скороченої черги
-            turn_abbreviated = turn_abbreviated_check('/home/galmed/svitlograf/chart.svg')
+            turn_abbreviated = turn_abbreviated_check('/home/galmed/svitlograf/svg_image/chart.svg')
             add_users_turn_abbreviated(user_id=user['id'], turn_abbreviated=turn_abbreviated)
 
             # Шлях до SVG файлу
-            svg_file_path = '/home/galmed/svitlograf/chart.svg'
-            png_file_path = '/home/galmed/svitlograf/chart.png'
+            svg_file_path = '/home/galmed/svitlograf/svg_image/chart.svg'
+            png_file_path = '/home/galmed/svitlograf/svg_image/chart.png'
 
             # Конвертація SVG в PNG
             cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
@@ -304,10 +304,10 @@ async def check_website_updates(last_color_list=None, turn='4'):
 
             if last_color_list != color_list:
                 logger.info("Знайдено оновлення на сайті, розсилаємо графік")
-                with open(f'/home/galmed/svitlograf/chart{turn}.svg', 'w') as file:
+                with open(f'/home/galmed/svitlograf/svg_image/chart{turn}.svg', 'w') as file:
                     file.write(svg_code)
                 last_color_list = color_list
-                await send_update_graph(turn=turn,svg_file_path=f'/home/galmed/svitlograf/chart{turn}.svg')
+                await send_update_graph(turn=turn,svg_file_path=f'/home/galmed/svitlograf/svg_image/chart{turn}.svg')
 
         except Exception as e:
             logger.error(f"Помилка при перевірці оновлень сайту: {e}")
@@ -332,7 +332,7 @@ async def send_update_graph(day='todayGraphId',turn=None,svg_file_path=None):
                 requests_count = 0
 
             # Шлях до SVG файлу
-            png_file_path = f'/home/galmed/svitlograf/chart{turn}.png'
+            png_file_path = f'/home/galmed/svitlograf/svg_image/chart{turn}.png'
 
             # Конвертація SVG в PNG
             cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)

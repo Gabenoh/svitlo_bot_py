@@ -27,4 +27,4 @@ def turn_abbreviated_check(svg_file_path):
 
 
 if __name__ == '__main__':
-    print(turn_abbreviated_check('../chart.svg'))
+    print(turn_abbreviated_check('../svg_image/chart.svg'))

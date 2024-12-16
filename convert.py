@@ -28,10 +28,10 @@ def get_schedule(user_number = '21010148'):
         result_element = driver.find_element(By.ID, "todayGraphId")
         svg_code = result_element.get_attribute('outerHTML')
         print(svg_code)
-        with open('/home/galmed/svitlograf/chart.svg', 'w') as file:
+        with open('/logs/chart.svg', 'w') as file:
             file.write(svg_code)
-        svg_file_path = '/home/galmed/svitlograf/chart.svg'
-        png_file_path = '/home/galmed/svitlograf/chart.png'
+        svg_file_path = '/home/galmed/svitlograf/svg_image/chart.svg'
+        png_file_path = '/home/galmed/svitlograf/svg_image/chart.png'
         remove_elements_before_first_gt(svg_file_path)
         cairosvg.svg2png(url=svg_file_path, write_to=png_file_path)
 

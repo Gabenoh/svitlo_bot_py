@@ -1,4 +1,6 @@
 import datetime
+import time
+from selenium.webdriver.common.keys import Keys
 
 
 def todaydate():
@@ -29,6 +31,14 @@ def tomorowdate():
     # Виводимо відформатовану завтрашню дату
     return formatted_tomorrow
 
+
+def slow_type(element, text, delay=0.1):
+    """Імітує повільне введення тексту (як людина) з примусовим очищенням)."""
+    element.send_keys(Keys.CONTROL + "a")
+    element.send_keys(Keys.DELETE)
+    for character in text:
+        element.send_keys(character)
+        time.sleep(delay)
 
 if __name__ == '__main__':
     print(todaydate())

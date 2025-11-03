@@ -10,9 +10,13 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, WebDriverException
-from selenium.common.exceptions import TimeoutException
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    WebDriverException,
+    TimeoutException,
+    SessionNotCreatedException,
+    InvalidSessionIdException)
 from constants import TOKEN, admin
 from utils import *
 from db import *
@@ -43,7 +47,7 @@ def create_driver():
 driver = create_driver()
 requests_count = 0
 max_requests_before_restart = 100
-WAIT_TIMEOUT = 25  # Загальний таймаут для WebDriverWait
+WAIT_TIMEOUT = 15  # Загальний таймаут для WebDriverWait
 
 # --- ГЛОБАЛЬНІ ЛОКАТОРИ (ОСТАТОЧНІ РОБОЧІ) ---
 INPUT_FIELD_LOCATOR = (By.NAME, "personalAccount")
@@ -56,39 +60,78 @@ TOMORROW_CONTAINER_XPATH = "//div[contains(@class, 'MuiDialogContent-root')]//di
 DIALOG_HEADER_LOCATOR = (By.XPATH, f"{DIALOG_LOCATOR[1]}//div[contains(., 'Станом на')]")
 
 
-# === ОНОВЛЕНА УНІВЕРСАЛЬНА ФУНКЦІЯ СЕЛЕНІУМУ ===
-def get_schedule_from_site(user_number: str):
+def restart_driver():
+    """Безпечно закриває і перезапускає WebDriver"""
+    global driver, requests_count
+    try:
+        driver.quit()
+        logger.info("WebDriver успішно закрито")
+    except Exception as e:
+        logger.warning(f"Помилка при закритті WebDriver: {e}")
+
+    try:
+        driver = create_driver()
+        requests_count = 0
+        logger.info("WebDriver успішно перезапущено")
+        return True
+    except Exception as e:
+        logger.error(f"Не вдалося перезапустити WebDriver: {e}")
+        return False
+
+
+def get_schedule_from_site(user_number: str, max_retries=3):
     """
-    Виконує всі кроки Selenium: ВІДКРИТТЯ САЙТУ З НУЛЯ, введення номера, натискання
-    та очікування модального вікна.
+    Виконує всі кроки Selenium з обробкою помилок та повторними спробами.
     """
     global driver, requests_count
 
-    wait_local = WebDriverWait(driver, WAIT_TIMEOUT)
+    for attempt in range(max_retries):
+        try:
+            wait_local = WebDriverWait(driver, WAIT_TIMEOUT)
 
-    # 1. ПЕРЕВІРКА І ПЕРЕЗАПУСК ДРАЙВЕРА (за необхідності)
-    if requests_count >= max_requests_before_restart:
-        driver.quit()
-        driver = create_driver()
-        requests_count = 0
+            # 1. ПЕРЕВІРКА І ПЕРЕЗАПУСК ДРАЙВЕРА (за необхідності)
+            if requests_count >= max_requests_before_restart:
+                restart_driver()
 
-    # 2. ВІДКРИТТЯ САЙТУ З НУЛЯ (КОЖНОГО РАЗУ)
-    driver.get("https://svitlo.oe.if.ua")
-    requests_count += 1
+            # 2. ВІДКРИТТЯ САЙТУ З НУЛЯ (КОЖНОГО РАЗУ)
+            driver.get("https://svitlo.oe.if.ua")
+            requests_count += 1
 
-    # 3. ВВЕДЕННЯ НОМЕРА
-    number_input = wait_local.until(EC.element_to_be_clickable(INPUT_FIELD_LOCATOR))
-    slow_type(number_input, user_number, delay=0.1)
+            # 3. ВВЕДЕННЯ НОМЕРА
+            number_input = wait_local.until(EC.element_to_be_clickable(INPUT_FIELD_LOCATOR))
+            slow_type(number_input, user_number, delay=0.1)
 
-    # 4. НАТИСКАННЯ КНОПКИ
-    submit_button = wait_local.until(EC.element_to_be_clickable(SUBMIT_BUTTON_LOCATOR))
-    submit_button.click()
+            # 4. НАТИСКАННЯ КНОПКИ
+            submit_button = wait_local.until(EC.element_to_be_clickable(SUBMIT_BUTTON_LOCATOR))
+            submit_button.click()
 
-    # 5. ОЧІКУВАННЯ МОДАЛЬНОГО ВІКНА
-    wait_local.until(EC.visibility_of_element_located(DIALOG_LOCATOR))
-    time.sleep(2)  # Даємо час на рендеринг контенту
+            # 5. ОЧІКУВАННЯ МОДАЛЬНОГО ВІКНА
+            wait_local.until(EC.visibility_of_element_located(DIALOG_LOCATOR))
+            time.sleep(2)
 
-    # Драйвер знаходиться у відкритому модальному вікні
+            return True  # Успішно виконано
+
+        except (InvalidSessionIdException, SessionNotCreatedException) as e:
+            logger.error(f"Сесія WebDriver втрачена (спроба {attempt + 1}/{max_retries}): {e}")
+            if not restart_driver():
+                if attempt == max_retries - 1:
+                    raise
+            time.sleep(2)  # Пауза перед повторною спробою
+
+        except WebDriverException as e:
+            logger.error(f"WebDriver помилка (спроба {attempt + 1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                raise
+            restart_driver()
+            time.sleep(2)
+
+        except Exception as e:
+            logger.error(f"Загальна помилка в get_schedule_from_site (спроба {attempt + 1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2)
+
+    return False
 
 
 def parse_schedule(driver, container_xpath, day_name, known_turn=None):
@@ -331,7 +374,7 @@ async def update_all_turns_command(message: types.Message):
 
 
 async def send_daily_message(day='tomorrow'):
-    """Надсилає графік всім користувачам (текстом)"""
+    """Надсилає графік всім користувачам (текстом) з обробкою помилок"""
     global driver
     user_list = get_all_user()
     logger.info(f"Початок надсилання графіків користувачам на {day}")
@@ -345,25 +388,34 @@ async def send_daily_message(day='tomorrow'):
         message_prefix = f'Ваш графік відключень💡 на завтра {tomorowdate()} 👇'
         day_name = "Завтра"
 
+    if datetime.datetime.now().time().hour >= 22:
+        logger.warning("Час перевищує 22:00, зупинка виконання.")
+        await send_message_to_all()
+        return None
+
     for user in user_list:
         try:
             user_number_str = user['turn']
             known_turn = user.get('turn_abbreviated')
 
-            # === КРОК 1-3: ВХІД НА САЙТ ТА ОЧІКУВАННЯ МОДАЛЬНОГО ВІКНА (Рефакторинг) ===
-            get_schedule_from_site(user_number_str)
+            # Спроба завантажити сайт з обробкою помилок
+            try:
+                success = get_schedule_from_site(user_number_str)
+                if not success:
+                    logger.error(f"Не вдалося завантажити графік для користувача {user['user']}")
+                    continue
+            except WebDriverException as e:
+                logger.error(f"WebDriver помилка для користувача {user['user']}: {e}")
+                restart_driver()
+                continue
 
-            # === КРОК 4: ПАРСИНГ ГРАФІКУ ===
             schedule_text, turn_abbreviated = parse_schedule(driver, container_xpath, day_name, known_turn=known_turn)
 
-            # === КРОК 6: ВІДПРАВКА ===
             if "❌ Графік на" in schedule_text or "💡 Графік на" in schedule_text:
                 logger.info(f"Графік відсутній/невизначений для {user['user']}")
                 continue
 
-            # Оновлюємо чергу в базі, якщо вона була визначена під час парсингу
             if turn_abbreviated != "N/A" and known_turn is None:
-                # Використовуємо внутрішній id, а не телеграм id
                 add_users_turn_abbreviated(user_id=user['id'], turn_abbreviated=turn_abbreviated)
 
             await bot.send_message(chat_id=user['user'],
@@ -376,27 +428,33 @@ async def send_daily_message(day='tomorrow'):
             continue
         except WebDriverException as e:
             logger.error(f"WebDriver exception для користувача {user['user']}: {e}")
+            restart_driver()
             continue
         except Exception as e:
             logger.error(f"Помилка при відправці щоденного повідомлення користувачу {user['user']}: {e}")
             continue
 
-
-async def check_website_updates(turn='4.2'):  # last_schedule_text видалено!
-    """Перевіряє оновлення графіку на сьогодні, використовуючи модальне вікно."""
+async def check_website_updates(turn='4.2'):
+    """Перевіряє оновлення графіку на сьогодні з обробкою помилок."""
     global driver
     check_number = get_first_user_with_turn_abbreviated(turn_abbreviated_value=turn)
     logger.info(f"Перевірку оновлень графіку запущено для черги {turn}, з номером рахунку {check_number}")
 
-    # Завантажуємо останній збережений графік з JSON
     last_schedule_text = get_last_schedule(turn)
     if last_schedule_text is None:
         logger.info(f"Кеш для черги {turn} порожній. Перший запуск.")
 
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+    error_sleep_time = 300  # 5 хвилин при помилках
+
     while True:
         try:
             # 1. ВХІД НА САЙТ ТА ОЧІКУВАННЯ МОДАЛЬНОГО ВІКНА
-            get_schedule_from_site(check_number)
+            success = get_schedule_from_site(check_number)
+
+            if not success:
+                raise WebDriverException("Не вдалося завантажити сайт після всіх спроб")
 
             # 2. Отримайте результат (ТЕКСТ)
             schedule_text, _ = parse_schedule(driver, TODAY_CONTAINER_XPATH, "Сьогодні", known_turn=turn)
@@ -405,37 +463,68 @@ async def check_website_updates(turn='4.2'):  # last_schedule_text видале�
 
             # Нормалізація для надійного порівняння
             normalized_text = " ".join(current_schedule_text.split()).strip()
-            # Для порівняння, ми також нормалізуємо останній збережений текст
             normalized_last_text = " ".join(last_schedule_text.split()).strip() if last_schedule_text else None
 
             logger.info(f'Актуальний графік для черги {turn} (початок): {normalized_text[:100]}...')
 
-            # --- ЛОГІКА ПОРІВНЯННЯ ТА ОНОВЛЕННЯ ---
-
-            # 1. Якщо це перший запуск (немає кешу) АБО текст змінився
+            # Логіка порівняння та оновлення
             is_changed = normalized_text != normalized_last_text
-
-            # 2. Ігноруємо "порожні" або помилкові графіки для оновлення
             is_valid_schedule = "❌ Графік на" not in normalized_text and "💡 Графік на" not in normalized_text
 
             if is_valid_schedule and (last_schedule_text is None or is_changed):
                 logger.info(f"Знайдено оновлення на сайті для черги {turn}, розсилаємо графік")
 
-                # Оновлюємо кеш
                 update_last_schedule(turn, current_schedule_text)
-                last_schedule_text = current_schedule_text  # Оновлюємо локально для наступної ітерації
+                last_schedule_text = current_schedule_text
 
-                # Надсилаємо повідомлення
                 await send_update_graph(turn=turn, schedule_text=current_schedule_text)
 
-            # Якщо графік недійсний, але був збережений дійсний, не оновлюємо кеш і не розсилаємо
             elif not is_valid_schedule and last_schedule_text is not None:
                 logger.warning(f"Графік для {turn} недійсний, але кеш не оновлюємо.")
 
-        except Exception as e:
-            logger.error(f"Помилка при перевірці оновлень сайту для черги {turn}: {e}")
+            # Скидаємо лічильник помилок при успішній перевірці
+            consecutive_errors = 0
+            await asyncio.sleep(180)  # Нормальна пауза
 
-        await asyncio.sleep(300)  # Перевірка кожні 5 хвилин
+        except (InvalidSessionIdException, SessionNotCreatedException) as e:
+            consecutive_errors += 1
+            logger.error(f"Сесія WebDriver втрачена для черги {turn} (помилка #{consecutive_errors}): {e}")
+            restart_driver()
+
+            if consecutive_errors >= max_consecutive_errors:
+                logger.critical(
+                    f"КРИТИЧНО: {max_consecutive_errors} послідовних помилок для черги {turn}. Збільшуємо паузу.")
+                await asyncio.sleep(error_sleep_time)
+                consecutive_errors = 0
+            else:
+                await asyncio.sleep(30)
+
+        except WebDriverException as e:
+            consecutive_errors += 1
+            logger.error(f"WebDriver помилка для черги {turn} (помилка #{consecutive_errors}): {e}")
+            restart_driver()
+
+            if consecutive_errors >= max_consecutive_errors:
+                logger.critical(
+                    f"КРИТИЧНО: {max_consecutive_errors} послідовних помилок для черги {turn}. Збільшуємо паузу.")
+                await asyncio.sleep(error_sleep_time)
+                consecutive_errors = 0
+            else:
+                await asyncio.sleep(30)
+
+        except Exception as e:
+            consecutive_errors += 1
+            logger.error(
+                f"Несподівана помилка при перевірці оновлень для черги {turn} (помилка #{consecutive_errors}): {e}")
+
+            if consecutive_errors >= max_consecutive_errors:
+                logger.critical(
+                    f"КРИТИЧНО: {max_consecutive_errors} послідовних помилок для черги {turn}. Збільшуємо паузу.")
+                await asyncio.sleep(error_sleep_time)
+                consecutive_errors = 0
+            else:
+                await asyncio.sleep(180)
+
 
 async def send_update_graph(turn=None, schedule_text=None):
     """Надсилає оновлений графік на сьогодні (текстом)"""
@@ -467,9 +556,6 @@ def main():
     scheduler = AsyncIOScheduler()
     # Щоденна розсилка графіку на завтра о 17:22
     scheduler.add_job(send_daily_message, trigger='cron', hour=17, minute=22, misfire_grace_time=15)
-    # Щоденна розсилка оновленого графіку на сьогодні о 6:00
-    scheduler.add_job(send_daily_message, trigger='cron', hour=6, minute=0, misfire_grace_time=15,
-                      kwargs={'day': 'today'})
     scheduler.start()
 
     loop = asyncio.get_event_loop()

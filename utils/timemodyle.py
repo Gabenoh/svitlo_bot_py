@@ -32,10 +32,11 @@ def tomorowdate():
     return formatted_tomorrow
 
 
-def slow_type(element, text, delay=0.1):
+def slow_type(element, text, delay=0.2):
     """Імітує повільне введення тексту (як людина) з примусовим очищенням)."""
     element.send_keys(Keys.CONTROL + "a")
     element.send_keys(Keys.DELETE)
+    time.sleep(0.5)
     for character in text:
         element.send_keys(character)
         time.sleep(delay)

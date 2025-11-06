@@ -1,4 +1,3 @@
-import logging
 import datetime
 import asyncio
 import re
@@ -181,7 +180,8 @@ def parse_schedule(driver, container_xpath, day_name, known_turn=None):
         matches_time = RE_TIME_INTERVAL_FINAL.findall(full_text)
 
         if matches_time:
-            schedule_times = [f"{start_time} — {end_time}" for start_time, end_time in matches_time]
+            # ЗМІНА: Додаємо червоні кола 🔴 навколо кожного інтервалу
+            schedule_times = [f"🔴{start_time} — {end_time}🔴" for start_time, end_time in matches_time]
             formatted_times = "\n".join(schedule_times)
             return f"Черга {min_turn} ({day_name.capitalize()}):\n{formatted_times}", min_turn
         else:
@@ -194,6 +194,7 @@ def parse_schedule(driver, container_xpath, day_name, known_turn=None):
     except Exception as e:
         logger.error(f"Загальна помилка парсингу {day_name}: {e}")
         return f"❌ Виникла помилка під час парсингу даних ({day_name}).", "N/A"
+
 
 # --- ХЕНДЛЕРИ БОТА ---
 
@@ -254,6 +255,7 @@ async def send_all_message(message: types.Message):
             logger.error(f"Помилка при відправці повідомлень: {e}")
             await message.reply("Сталася помилка при відправці повідомлень.")
 
+
 async def send_message_to_all():
     user_list = get_all_user()
     logger.info(f"Початок надсилання повідомлень про відсутність відключень")
@@ -301,7 +303,8 @@ async def get_schedule(message: types.Message):
             check_user(message.from_user.id, user_number, final_min_turn)  # Зберігаємо чергу в базу
 
         for prefix, schedule_text in schedule_results:
-            await message.reply(text=f'{prefix}\n\n{schedule_text}')
+            # Змінено: Додано жирний шрифт для префікса та parse_mode
+            await message.reply(text=f'**{prefix}**\n\n{schedule_text}', parse_mode=types.ParseMode.MARKDOWN)
 
     except NoSuchElementException:
         await message.reply('Номер особового рахунку не коректний або не знайдено графік відключень. '
@@ -374,65 +377,137 @@ async def update_all_turns_command(message: types.Message):
 
 
 async def send_daily_message(day='tomorrow'):
-    """Надсилає графік всім користувачам (текстом) з обробкою помилок"""
+    """Надсилає графік всім користувачам, оптимізовано через перевірку по скорочених чергах."""
     global driver
-    user_list = get_all_user()
-    logger.info(f"Початок надсилання графіків користувачам на {day}")
 
+    # 1. Визначення параметрів дня
     if day == "today":
         container_xpath = TODAY_CONTAINER_XPATH
-        message_prefix = f'Оновлений графік відключень💡 на сьогодні {todaydate()} 👇'
         day_name = "Сьогодні"
-    else:
+    elif day == "tomorrow":
         container_xpath = TOMORROW_CONTAINER_XPATH
-        message_prefix = f'Ваш графік відключень💡 на завтра {tomorowdate()} 👇'
         day_name = "Завтра"
+    else:
+        logger.error(f"Невідомий параметр day: {day}")
+        return
 
-    if datetime.datetime.now().time().hour >= 22:
-        logger.warning("Час перевищує 22:00, зупинка виконання.")
+    # Перевірка часу для 'tomorrow' (якщо це основна розсилка)
+    if day == "tomorrow" and datetime.datetime.now().time().hour >= 22:
+        logger.warning("Час перевищує 22:00, зупинка щоденної розсилки.")
         await send_message_to_all()
         return None
 
+    logger.info(f"Початок розсилки графіків користувачам на {day}")
+
+    # 2. Отримання унікальних черг
+    unique_turns = get_unique_abbreviated_turns()
+
+    for turn in unique_turns:
+        try:
+            # 3. Визначення номера для перевірки
+            check_number = get_first_user_with_turn_abbreviated(turn)
+            if not check_number:
+                logger.warning(f"Не знайдено номера рахунку для черги {turn}. Пропускаємо.")
+                continue
+
+            # 4. Перевірка сайту (одна спроба на чергу)
+            success = get_schedule_from_site(check_number)
+            if not success:
+                logger.error(f"Не вдалося завантажити графік для черги {turn}. Пропускаємо розсилку для цієї черги.")
+                await asyncio.sleep(5)
+                continue
+
+            # 5. Парсинг графіку (один раз)
+            schedule_text, _ = parse_schedule(driver, container_xpath, day_name, known_turn=turn)
+
+            # 6. Визначення префікса та перевірка на недійсний/порожній графік
+
+            if schedule_text.startswith("🟢 Відключення"):
+                suffix_emoji = " 🟢"
+            elif "—" in schedule_text:
+                suffix_emoji = " 💡"
+            elif "❌ Графік на" in schedule_text or "💡 Графік на" in schedule_text:
+                logger.info(f"Графік відсутній/невизначений для черги {turn}. Пропускаємо розсилку для цієї черги.")
+                await asyncio.sleep(300)
+                await asyncio.create_task(send_daily_message())
+                break
+            else:
+                suffix_emoji = " 💡"
+
+            # Формування повного повідомлення
+            date_str = tomorowdate() if day == "tomorrow" else todaydate()
+            message_prefix = f'Ваш графік відключень на {day_name.lower()} {date_str} {suffix_emoji}'
+
+            # 7. Розсилка всім користувачам цієї черги
+            user_list_for_turn = get_all_user_with_turn(turn)
+
+            for user in user_list_for_turn:
+                try:
+                    await bot.send_message(
+                        chat_id=user['user'],
+                        # Використовуємо ** для жирного шрифту заголовка
+                        text=f'**{message_prefix}**\n\n{schedule_text}',
+                        parse_mode=types.ParseMode.MARKDOWN
+                    )
+                    logger.info(f"Розсилка на {day} (Черга {turn}) відправлена користувачу: {user['user']}")
+                    # Невелика пауза між користувачами
+                    await asyncio.sleep(0.05)
+                except exceptions.BotBlocked:
+                    logger.warning(f"Користувач заблокував бота: {user['user']}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Помилка при відправці повідомлення користувачу {user['user']} (Черга {turn}): {e}")
+                    continue
+
+            # Пауза між перевірками різних черг
+            await asyncio.sleep(3)
+
+        except WebDriverException as e:
+            logger.error(f"WebDriver помилка при обробці черги {turn}. Перезапуск драйвера: {e}")
+            restart_driver()
+            await asyncio.sleep(5)
+            continue
+        except Exception as e:
+            logger.error(f"Загальна помилка при обробці черги {turn}: {e}")
+            continue
+
+
+async def send_update_graph(turn=None, schedule_text=None):
+    """Надсилає оновлений графік на сьогодні (текстом)"""
+    user_list = get_all_user_with_turn(turn)
+    logger.info(f"Початок надсилання ОНОВЛЕНИХ графіків користувачам (Черга {turn})")
+
+    # --- ВИЗНАЧЕННЯ АКТУАЛЬНОГО ПРЕФІКСА ---
+    if schedule_text.startswith("🟢 Відключення"):
+        suffix_emoji = " 🟢"
+    elif "—" in schedule_text:
+        # Використовуємо більш виразний емодзі для оновлення/появи відключень
+        suffix_emoji = " 🚨"
+    else:
+        suffix_emoji = " 💡"
+
+    message_prefix = f'Графік відключень на сьогодні {todaydate()} змінився{suffix_emoji}'
+    # --------------------------------------
+
     for user in user_list:
         try:
-            user_number_str = user['turn']
-            known_turn = user.get('turn_abbreviated')
-
-            # Спроба завантажити сайт з обробкою помилок
-            try:
-                success = get_schedule_from_site(user_number_str)
-                if not success:
-                    logger.error(f"Не вдалося завантажити графік для користувача {user['user']}")
-                    continue
-            except WebDriverException as e:
-                logger.error(f"WebDriver помилка для користувача {user['user']}: {e}")
-                restart_driver()
-                continue
-
-            schedule_text, turn_abbreviated = parse_schedule(driver, container_xpath, day_name, known_turn=known_turn)
-
-            if "❌ Графік на" in schedule_text or "💡 Графік на" in schedule_text:
-                logger.info(f"Графік відсутній/невизначений для {user['user']}")
-                continue
-
-            if turn_abbreviated != "N/A" and known_turn is None:
-                add_users_turn_abbreviated(user_id=user['id'], turn_abbreviated=turn_abbreviated)
+            if datetime.datetime.now().time().hour <= 6:
+                logger.warning("Занадто рано для зміни графіків.")
+                return None
 
             await bot.send_message(chat_id=user['user'],
-                                   text=f'{message_prefix}\n\n{schedule_text}')
+                                   # Змінено: Додано жирний шрифт для префікса та parse_mode
+                                   text=f'**{message_prefix}**\n\n{schedule_text}',
+                                   parse_mode=types.ParseMode.MARKDOWN)
 
-            logger.info(f"Щоденне повідомлення відправлено користувачу: {user['user']}")
-
+            logger.info(f"Оновлене повідомлення відправлено користувачу: {user['user']}")
         except exceptions.BotBlocked:
             logger.warning(f"Користувач заблокував бота: {user['user']}")
             continue
-        except WebDriverException as e:
-            logger.error(f"WebDriver exception для користувача {user['user']}: {e}")
-            restart_driver()
-            continue
         except Exception as e:
-            logger.error(f"Помилка при відправці щоденного повідомлення користувачу {user['user']}: {e}")
+            logger.error(f"Помилка при відправці оновленого повідомлення користувачу {user['user']}: {e}")
             continue
+
 
 async def check_website_updates(turn='4.2'):
     """Перевіряє оновлення графіку на сьогодні з обробкою помилок."""
@@ -524,32 +599,6 @@ async def check_website_updates(turn='4.2'):
                 consecutive_errors = 0
             else:
                 await asyncio.sleep(180)
-
-
-async def send_update_graph(turn=None, schedule_text=None):
-    """Надсилає оновлений графік на сьогодні (текстом)"""
-    user_list = get_all_user_with_turn(turn)
-    logger.info(f"Початок надсилання ОНОВЛЕНИХ графіків користувачам (Черга {turn})")
-
-    message_prefix = f'Оновлений графік відключень💡 на сьогодні {todaydate()} 👇'
-
-    for user in user_list:
-        try:
-            # Обмеження на ранкові години (можна прибрати або змінити)
-            if datetime.datetime.now().time().hour <= 6:
-                logger.warning("Занадто рано для зміни графіків.")
-                return None
-
-            await bot.send_message(chat_id=user['user'],
-                                   text=f'{message_prefix}\n\n{schedule_text}')
-
-            logger.info(f"Оновлене повідомлення відправлено користувачу: {user['user']}")
-        except exceptions.BotBlocked:
-            logger.warning(f"Користувач заблокував бота: {user['user']}")
-            continue
-        except Exception as e:
-            logger.error(f"Помилка при відправці оновленого повідомлення користувачу {user['user']}: {e}")
-            continue
 
 
 def main():

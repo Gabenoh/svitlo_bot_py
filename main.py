@@ -607,6 +607,10 @@ def main():
     scheduler.add_job(send_daily_message, trigger='cron', hour=17, minute=22, misfire_grace_time=15)
     scheduler.start()
 
+    if 17 < datetime.datetime.now().time().hour < 22:
+        logger.info('Програма перевірки графіків на завтра стартує зараз')
+        send_daily_message()
+
     loop = asyncio.get_event_loop()
     turn_list = get_unique_abbreviated_turns()
     for i in turn_list:

@@ -46,7 +46,7 @@ def create_driver():
 driver = create_driver()
 requests_count = 0
 max_requests_before_restart = 100
-WAIT_TIMEOUT = 15  # Загальний таймаут для WebDriverWait
+WAIT_TIMEOUT = 20  # Загальний таймаут для WebDriverWait
 
 # --- ГЛОБАЛЬНІ ЛОКАТОРИ (ОСТАТОЧНІ РОБОЧІ) ---
 INPUT_FIELD_LOCATOR = (By.NAME, "personalAccount")
@@ -222,15 +222,15 @@ async def admin_command(message: types.Message):
 @dp.message_handler(commands=['send_tomorrow_graf_all'])
 async def send_all_tomorrow(message: types.Message):
     if await admin(message.from_user.id):
-        await send_daily_message(day='tomorrow')
         await message.reply("Розсилка графіків на завтра запущена.")
+        await send_daily_message(day='tomorrow', admintriger=True)
 
 
 @dp.message_handler(commands=['send_today_graf_all'])
-async def send_all_today_(message: types.Message):
+async def send_all_today(message: types.Message):
     if await admin(message.from_user.id):
-        await send_daily_message(day='today')
         await message.reply("Розсилка графіків на сьогодні запущена.")
+        await send_daily_message(day='today', admintriger=True)
 
 
 @dp.message_handler(commands=['send_message_all'])
@@ -376,7 +376,7 @@ async def update_all_turns_command(message: types.Message):
         await message.answer("У вас немає доступу до цієї команди.")
 
 
-async def send_daily_message(day='tomorrow'):
+async def send_daily_message(day='tomorrow', admintriger=False):
     """Надсилає графік всім користувачам, оптимізовано через перевірку по скорочених чергах."""
     global driver
 
@@ -392,7 +392,7 @@ async def send_daily_message(day='tomorrow'):
         return
 
     # Перевірка часу для 'tomorrow' (якщо це основна розсилка)
-    if day == "tomorrow" and datetime.datetime.now().time().hour >= 22:
+    if day == "tomorrow" and datetime.datetime.now().time().hour >= 22 and admintriger == False:
         logger.warning("Час перевищує 22:00, зупинка щоденної розсилки.")
         await send_message_to_all()
         return None

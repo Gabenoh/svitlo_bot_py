@@ -49,13 +49,13 @@ max_requests_before_restart = 100
 WAIT_TIMEOUT = 20  # Загальний таймаут для WebDriverWait
 
 # --- ГЛОБАЛЬНІ ЛОКАТОРИ (ОСТАТОЧНІ РОБОЧІ) ---
+TODAY_CONTAINER_XPATH = "(//div[contains(@class, 'MuiDialogContent-root')]//div[./div[contains(text(), 'Графік погодинних')]])[1]"
+TOMORROW_CONTAINER_XPATH = "(//div[contains(@class, 'MuiDialogContent-root')]//div[./div[contains(text(), 'Графік погодинних')]])[2]"
+
+# Для діалогового вікна та кнопки залишаємо як є, або уточнюємо:
 INPUT_FIELD_LOCATOR = (By.NAME, "personalAccount")
 SUBMIT_BUTTON_LOCATOR = (By.XPATH, "//button[contains(., 'Дізнатись чергу')]")
 DIALOG_LOCATOR = (By.XPATH, "//div[contains(@class, 'MuiDialog-root') and contains(., 'Графік погодинних')]")
-TODAY_CONTAINER_XPATH = "//div[contains(@class, 'MuiDialogContent-root')]//div[contains(@class, '_graph_qwrgv')][1]"
-TOMORROW_CONTAINER_XPATH = "//div[contains(@class, 'MuiDialogContent-root')]//div[contains(@class, '_graph_qwrgv')][2]"
-
-# НАЙБІЛЬШ УНІВЕРСАЛЬНИЙ ЛОКАТОР ЗАГОЛОВКА
 DIALOG_HEADER_LOCATOR = (By.XPATH, f"{DIALOG_LOCATOR[1]}//div[contains(., 'Станом на')]")
 
 
@@ -420,6 +420,14 @@ async def send_daily_message(day='tomorrow', admintriger=False):
             # 5. Парсинг графіку (один раз)
             schedule_text, _ = parse_schedule(driver, container_xpath, day_name, known_turn=turn)
 
+            # --- ДОДАНО: ПЕРЕВІРКА НА ТЕХНІЧНУ ПОМИЛКУ ---
+            # Якщо повернулася технічна помилка (Timeout або Exception), ми НЕ відправляємо повідомлення
+            if "❌ Не вдалося" in schedule_text or "❌ Виникла помилка" in schedule_text:
+                logger.error(f"Парсинг не вдався для черги {turn}. Повідомлення не буде відправлено.")
+                # Можна додати паузу перед наступною спробою
+                await asyncio.sleep(5)
+                continue
+
             # 6. Визначення префікса та перевірка на недійсний/порожній графік
 
             if schedule_text.startswith("🟢 Відключення"):
@@ -533,6 +541,12 @@ async def check_website_updates(turn='4.2'):
 
             # 2. Отримайте результат (ТЕКСТ)
             schedule_text, _ = parse_schedule(driver, TODAY_CONTAINER_XPATH, "Сьогодні", known_turn=turn)
+
+            # --- ДОДАНО: ПЕРЕВІРКА НА ТЕХНІЧНУ ПОМИЛКУ ---
+            if "❌ Не вдалося" in schedule_text or "❌ Виникла помилка" in schedule_text:
+                logger.warning(f"Отримано помилку парсингу при перевірці оновлень для {turn}. Ігноруємо.")
+                # Викидаємо виключення, щоб спрацювала логіка повторних спроб (consecutive_errors)
+                raise WebDriverException("Parser returned error text instead of schedule")
 
             current_schedule_text = schedule_text
 
